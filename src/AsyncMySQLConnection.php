@@ -628,7 +628,7 @@ final class AsyncMySQLConnection
      */
     private function waitForAsyncCompletion(mysqli $mysqli, ?mysqli_stmt $stmt = null): PromiseInterface
     {
-        return async(function () use ($mysqli, $stmt) {
+        return async(function () use ($mysqli, $stmt): bool|mysqli_result {
             $links = [$mysqli];
             $errors = [$mysqli];
             $reject = [$mysqli];
