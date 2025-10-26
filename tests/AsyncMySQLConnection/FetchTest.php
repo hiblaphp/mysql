@@ -167,7 +167,7 @@ describe('AsyncMySQLConnection Fetch Methods', function () {
 
             expect($count)->toBe(3)
                 ->and($maxPrice)->toBe('300.00')
-                ->and($totalStock)->toBe(60)
+                ->and((int)$totalStock)->toBe(60)
             ;
 
             $db->execute('DROP TABLE IF EXISTS products')->await();

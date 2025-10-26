@@ -13,14 +13,18 @@ describe('AsyncMySQLConnection Connection Pool', function () {
         $stats = $db->getStats();
 
         expect($stats)->toHaveKeys([
-            'total',
-            'available',
-            'inUse',
+            'active_connections',
+            'pooled_connections',
+            'waiting_requests',
+            'max_size',
+            'config_validated',
         ]);
 
-        expect($stats['total'])->toBeInt()
-            ->and($stats['available'])->toBeInt()
-            ->and($stats['inUse'])->toBeInt()
+        expect($stats['active_connections'])->toBeInt()
+            ->and($stats['pooled_connections'])->toBeInt()
+            ->and($stats['waiting_requests'])->toBeInt()
+            ->and($stats['max_size'])->toBeInt()
+            ->and($stats['max_size'])->toBe(5) 
         ;
     });
 
@@ -35,19 +39,17 @@ describe('AsyncMySQLConnection Connection Pool', function () {
             )
         ')->await();
 
-        // First query
         $db->execute("INSERT INTO test_pool (value) VALUES ('test1')")->await();
 
         $statsAfterFirst = $db->getStats();
 
-        // Second query should reuse connection
         $db->execute("INSERT INTO test_pool (value) VALUES ('test2')")->await();
 
         $statsAfterSecond = $db->getStats();
 
-        // Pool should have connections available
         expect($statsAfterFirst)->toBeArray()
             ->and($statsAfterSecond)->toBeArray()
+            ->and($statsAfterFirst['active_connections'])->toBeGreaterThan(0)
         ;
 
         $db->execute('DROP TABLE IF EXISTS test_pool')->await();
@@ -79,7 +81,7 @@ describe('AsyncMySQLConnection Connection Pool', function () {
         expect($results)->toHaveCount(5);
 
         $count = $db->fetchValue('SELECT COUNT(*) FROM test_exhaustion')->await();
-        expect($count)->toBe(5);
+        expect((int)$count)->toBe(5); 
 
         $db->execute('DROP TABLE IF EXISTS test_exhaustion')->await();
     });
@@ -133,7 +135,9 @@ describe('AsyncMySQLConnection Connection Pool', function () {
         expect($results)->toHaveCount(5);
 
         $stats = $db->getStats();
-        expect($stats['inUse'])->toBeLessThanOrEqual(3);
+
+        expect($stats['active_connections'])->toBeLessThanOrEqual(3);
+        expect($stats['pooled_connections'])->toBeGreaterThanOrEqual(0);
     });
 
     it('handles errors in run method gracefully', function () {

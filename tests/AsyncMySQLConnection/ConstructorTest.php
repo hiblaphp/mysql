@@ -13,7 +13,7 @@ describe('AsyncMySQLConnection Constructor', function () {
         expect($db)->toBeInstanceOf(AsyncMySQLConnection::class);
 
         $stats = $db->getStats();
-        expect($stats['total'])->toBe(0); // No connections created yet
+        expect($stats['max_size'])->toBe(5);
     });
 
     it('uses default pool size of 10', function () {

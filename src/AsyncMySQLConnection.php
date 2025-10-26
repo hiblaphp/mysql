@@ -60,6 +60,7 @@ final class AsyncMySQLConnection
      *                                          - port: Database port (optional, must be positive integer)
      *                                          - socket: Unix socket path (optional)
      *                                          - charset: Character set (optional, default: 'utf8mb4')
+     *                                          - options: Array of mysqli options (optional, e.g., [MYSQLI_OPT_INT_AND_FLOAT_NATIVE => true])
      * @param  int  $poolSize  Maximum number of connections in the pool
      *
      * @throws ConfigurationException If configuration is invalid
@@ -628,7 +629,7 @@ final class AsyncMySQLConnection
      */
     private function waitForAsyncCompletion(mysqli $mysqli, ?mysqli_stmt $stmt = null): PromiseInterface
     {
-        return async(function () use ($mysqli, $stmt): bool|mysqli_result {
+        return async(function () use ($mysqli, $stmt): mysqli_result {
             $links = [$mysqli];
             $errors = [$mysqli];
             $reject = [$mysqli];
