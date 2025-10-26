@@ -1,6 +1,6 @@
 <?php
 
-namespace Fasync\Mysql\Exceptions;
+namespace Hibla\MySQL\Exceptions;
 
 use RuntimeException;
 

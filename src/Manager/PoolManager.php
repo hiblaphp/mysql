@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Hibla\MySQL\Manager;
 
-use Fasync\Mysql\Exceptions\PoolException;
+use Hibla\MySQL\Exceptions\PoolException;
 use Hibla\MySQL\Utilities\ConnectionFactory;
 use Hibla\MySQL\Utilities\ConnectionHealthChecker;
 use Hibla\MySQL\Utilities\ConfigValidator;
@@ -12,7 +12,6 @@ use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use InvalidArgumentException;
 use mysqli;
-use RuntimeException;
 use SplQueue;
 use Throwable;
 

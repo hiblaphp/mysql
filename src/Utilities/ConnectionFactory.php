@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Hibla\MySQL\Utilities;
 
-use Fasync\Mysql\Exceptions\PoolException;
+use Hibla\MySQL\Exceptions\PoolException;
 use mysqli;
 use mysqli_sql_exception;
 use RuntimeException;
