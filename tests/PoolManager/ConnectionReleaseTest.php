@@ -51,7 +51,6 @@ describe('PoolManager Connection Release', function () {
         $connection = $pool->get()->await();
         $initialActive = $pool->getStats()['active_connections'];
 
-        // Close the connection to make it "dead"
         $connection->close();
 
         $pool->release($connection);
@@ -74,7 +73,6 @@ describe('PoolManager Connection Release', function () {
         $stats = $pool->getStats();
         expect($stats['waiting_requests'])->toBe(1);
 
-        // Close connection1 to make it dead
         $connection1->close();
         $pool->release($connection1);
 
@@ -87,22 +85,25 @@ describe('PoolManager Connection Release', function () {
         $pool->close();
     });
 
-    it('rolls back active transaction before pooling', function () {
+    it('resets connection state before pooling', function () {
         $pool = new PoolManager(TestHelper::getTestConfig(), 5);
 
         $connection = $pool->get()->await();
 
-        $connection->query('CREATE TEMPORARY TABLE test_table (id INT AUTO_INCREMENT PRIMARY KEY)');
-        $connection->begin_transaction();
-        $connection->query('INSERT INTO test_table VALUES ()');
+        $connection->autocommit(false);
 
-        expect($connection->stat())->toContain('Commands out of sync');
+        $result = $connection->query('SELECT @@autocommit as ac');
+        $row = $result->fetch_assoc();
+        expect((int)$row['ac'])->toBe(0); 
 
         $pool->release($connection);
 
         $connection2 = $pool->get()->await();
 
-        // Verify transaction was rolled back (no transaction active)
+        $result = $connection2->query('SELECT @@autocommit as ac');
+        $row = $result->fetch_assoc();
+        expect((int)$row['ac'])->toBe(1);
+
         expect($connection2->query('SELECT 1'))->toBeInstanceOf(mysqli_result::class);
 
         $pool->release($connection2);

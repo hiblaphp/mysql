@@ -97,7 +97,8 @@ describe('PoolManager Closure', function () {
         }
 
         foreach ($connections as $conn) {
-            expect($conn->ping())->toBeTrue();
+            $result = $conn->query('SELECT 1');
+            expect($result)->toBeInstanceOf(mysqli_result::class);
         }
 
         foreach ($connections as $conn) {

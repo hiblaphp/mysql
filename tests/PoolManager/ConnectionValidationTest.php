@@ -6,12 +6,13 @@ use Hibla\MySQL\Manager\PoolManager;
 use Tests\Helpers\TestHelper;
 
 describe('PoolManager Connection Validation', function () {
-    it('validates connection is alive with ping', function () {
+    it('validates connection is alive with query', function () {
         $pool = new PoolManager(TestHelper::getTestConfig(), 5);
 
         $connection = $pool->get()->await();
 
-        expect($connection->ping())->toBeTrue();
+        $result = $connection->query('SELECT 1');
+        expect($result)->toBeInstanceOf(mysqli_result::class);
 
         $pool->release($connection);
 
@@ -26,7 +27,8 @@ describe('PoolManager Connection Validation', function () {
 
         $connection = $pool->get()->await();
 
-        expect($connection->ping())->toBeTrue();
+        $result = $connection->query('SELECT 1');
+        expect($result)->toBeInstanceOf(mysqli_result::class);
 
         $connection->close();
 
