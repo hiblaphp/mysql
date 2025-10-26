@@ -159,17 +159,14 @@ describe('PoolManager Edge Cases', function () {
     })->skip('Skipped to avoid DNS lookup warnings');
 
     it('handles charset configuration', function () {
-        $config = [
-            'host' => 'localhost',
-            'username' => 'root',
-            'database' => 'test_db',
+        $config = array_merge(TestHelper::getTestConfig(), [
             'charset' => 'utf8mb4',
-        ];
+        ]);
 
         $pool = new PoolManager($config, 5);
 
         $connection = $pool->get()->await();
-        
+
         $result = $connection->query("SHOW VARIABLES LIKE 'character_set_connection'");
         $row = $result->fetch_assoc();
         expect($row['Value'])->toBe('utf8mb4');

@@ -78,6 +78,10 @@ final class ConnectionFactory
         }
 
         foreach ($config['options'] as $option => $value) {
+            if (is_bool($value)) {
+                $value = (int) $value;
+            }
+
             if (!is_int($value) && !is_string($value)) {
                 throw new PoolException(
                     sprintf(
