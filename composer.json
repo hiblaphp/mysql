@@ -1,11 +1,16 @@
 {
     "name": "hiblaphp/mysql",
-    "description": "Asychonous Mysql Client base on php-mysqli extension",
+    "description": "Asychonous MySQL Client base on php-mysqli extension",
     "type": "library",
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Hibla\\Mysql\\": "src/"
+            "Hibla\\MySQL\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
         }
     },
     "minimum-stability": "dev",
@@ -16,5 +21,23 @@
         "hiblaphp/promise": "dev-main",
         "hiblaphp/async": "dev-main",
         "ext-mysqli": "*"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.10",
+        "pestphp/pest": "^3.0",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "hiblaphp/task": "dev-main"
+    },
+    "scripts": {
+        "test": "./vendor/bin/pest",
+        "format": "./vendor/bin/pint",
+        "format-test": "./vendor/bin/pint --test",
+        "analyze": "./vendor/bin/phpstan analyse"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
     }
 }

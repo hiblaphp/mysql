@@ -1,11 +1,13 @@
 <?php
 
-namespace Hibla\Mysql\Manager;
+declare(strict_types=1);
 
-use InvalidArgumentException;
-use mysqli;
+namespace Hibla\MySQL\Manager;
+
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
+use InvalidArgumentException;
+use mysqli;
 use RuntimeException;
 use SplQueue;
 use Throwable;
@@ -60,16 +62,17 @@ class PoolManager
      * @param  array<string, mixed>  $dbConfig  Database configuration array.
      * @param  int  $maxSize  Maximum number of concurrent connections.
      *
-     * @throws InvalidArgumentException If the configuration is invalid.
+     * @throws InvalidArgumentException If the configuration is invalid or pool size is less than 1.
      */
     public function __construct(array $dbConfig, int $maxSize = 10)
     {
+        $this->validatePoolSize($maxSize);
         $this->validateDbConfig($dbConfig);
         $this->configValidated = true;
         $this->dbConfig = $dbConfig;
         $this->maxSize = $maxSize;
-        $this->pool = new SplQueue;
-        $this->waiters = new SplQueue;
+        $this->pool = new SplQueue();
+        $this->waiters = new SplQueue();
     }
 
     /**
@@ -111,7 +114,7 @@ class PoolManager
         }
 
         /** @var Promise<mysqli> $promise */
-        $promise = new Promise;
+        $promise = new Promise();
         $this->waiters->enqueue($promise);
 
         return $promise;
@@ -158,6 +161,8 @@ class PoolManager
 
     /**
      * Gets the most recently active connection handled by the pool.
+     *
+     * @return mysqli|null The last connection or null if none has been used yet.
      */
     public function getLastConnection(): ?mysqli
     {
@@ -182,6 +187,8 @@ class PoolManager
 
     /**
      * Closes all connections and clears the pool.
+     *
+     * @return void
      */
     public function close(): void
     {
@@ -197,42 +204,92 @@ class PoolManager
             $promise = $this->waiters->dequeue();
             $promise->reject(new RuntimeException('Pool is being closed'));
         }
-        $this->pool = new SplQueue;
-        $this->waiters = new SplQueue;
+        $this->pool = new SplQueue();
+        $this->waiters = new SplQueue();
         $this->activeConnections = 0;
         $this->lastConnection = null;
     }
 
     /**
+     * Validates the pool size.
+     *
+     * @param  int  $maxSize  The maximum pool size to validate.
+     *
+     * @throws InvalidArgumentException If pool size is less than 1.
+     */
+    private function validatePoolSize(int $maxSize): void
+    {
+        if ($maxSize < 1) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Pool size must be at least 1, got %d',
+                    $maxSize
+                )
+            );
+        }
+    }
+
+    /**
      * Validates the database configuration.
      *
-     * @param  array<string, mixed>  $dbConfig
+     * @param  array<string, mixed>  $dbConfig  The database configuration to validate.
      *
-     * @throws InvalidArgumentException
+     * @throws InvalidArgumentException If the configuration is invalid.
      */
     private function validateDbConfig(array $dbConfig): void
     {
         if (count($dbConfig) === 0) {
             throw new InvalidArgumentException('Database configuration cannot be empty');
         }
+
         $requiredFields = ['host', 'username', 'database'];
         foreach ($requiredFields as $field) {
             if (! array_key_exists($field, $dbConfig)) {
-                throw new InvalidArgumentException("Missing required database configuration field: '{$field}'");
+                throw new InvalidArgumentException(
+                    sprintf("Missing required database configuration field: '%s'", $field)
+                );
             }
             if (in_array($field, ['host', 'database'], true) && ($dbConfig[$field] === '' || $dbConfig[$field] === null)) {
-                throw new InvalidArgumentException("Database configuration field '{$field}' cannot be empty");
+                throw new InvalidArgumentException(
+                    sprintf("Database configuration field '%s' cannot be empty", $field)
+                );
             }
         }
-        if (isset($dbConfig['port']) && (! is_int($dbConfig['port']) || $dbConfig['port'] <= 0)) {
-            throw new InvalidArgumentException('Database port must be a positive integer');
+
+        if (isset($dbConfig['port'])) {
+            if (! is_int($dbConfig['port'])) {
+                throw new InvalidArgumentException('Database port must be an integer');
+            }
+            if ($dbConfig['port'] <= 0) {
+                throw new InvalidArgumentException(
+                    sprintf(
+                        'Database port must be a positive integer, got %d',
+                        $dbConfig['port']
+                    )
+                );
+            }
         }
+
         if (isset($dbConfig['host']) && ! is_string($dbConfig['host'])) {
             throw new InvalidArgumentException('Database host must be a string');
         }
+
+        if (isset($dbConfig['username']) && ! is_string($dbConfig['username'])) {
+            throw new InvalidArgumentException('Database username must be a string');
+        }
+
+        if (isset($dbConfig['database']) && ! is_string($dbConfig['database'])) {
+            throw new InvalidArgumentException('Database database must be a string');
+        }
+
+        if (isset($dbConfig['password']) && ! is_string($dbConfig['password'])) {
+            throw new InvalidArgumentException('Database password must be a string');
+        }
+
         if (isset($dbConfig['charset']) && ! is_string($dbConfig['charset'])) {
             throw new InvalidArgumentException('Database charset must be a string');
         }
+
         if (isset($dbConfig['socket']) && ! is_string($dbConfig['socket'])) {
             throw new InvalidArgumentException('Database socket must be a string');
         }
@@ -241,7 +298,9 @@ class PoolManager
     /**
      * Creates a new, configured MySQLi connection.
      *
-     * @throws RuntimeException
+     * @return mysqli The newly created connection.
+     *
+     * @throws RuntimeException If the connection fails.
      */
     private function createConnection(): mysqli
     {
@@ -257,12 +316,12 @@ class PoolManager
         $mysqli = new mysqli($host, $username, $password, $database, $port, $socket);
 
         if ($mysqli->connect_error !== null) {
-            throw new RuntimeException('MySQLi Connection failed: '.$mysqli->connect_error);
+            throw new RuntimeException('MySQLi Connection failed: ' . $mysqli->connect_error);
         }
 
         if (isset($config['charset']) && is_string($config['charset'])) {
             if (! $mysqli->set_charset($config['charset'])) {
-                throw new RuntimeException('Failed to set charset: '.$mysqli->error);
+                throw new RuntimeException('Failed to set charset: ' . $mysqli->error);
             }
         }
 
@@ -271,6 +330,9 @@ class PoolManager
 
     /**
      * Checks if a MySQLi connection is still alive using a lightweight query.
+     *
+     * @param  mysqli  $connection  The connection to check.
+     * @return bool True if the connection is alive, false otherwise.
      */
     private function isConnectionAlive(mysqli $connection): bool
     {
@@ -283,6 +345,9 @@ class PoolManager
 
     /**
      * Resets connection state to clean it for reuse.
+     *
+     * @param  mysqli  $connection  The connection to reset.
+     * @return void
      */
     private function resetConnectionState(mysqli $connection): void
     {

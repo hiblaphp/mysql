@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd" 
+         bootstrap="vendor/autoload.php" 
+         colors="true">
+    <testsuites>
+        <testsuite name="Test Suite">
+            <directory suffix="Test.php">./tests</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+    <php>
+        <!-- PostgreSQL -->
+        <env name="PGSQL_HOST" value="127.0.0.1" force="true"/>
+        <env name="PGSQL_PORT" value="5443" force="true"/>
+        <env name="PGSQL_DATABASE" value="postgres" force="true"/>
+        <env name="PGSQL_USERNAME" value="postgres" force="true"/>
+        <env name="PGSQL_PASSWORD" value="postgres" force="true"/>
+    </php>
+</phpunit>
