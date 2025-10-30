@@ -67,18 +67,16 @@ final class ConnectionFactory
             mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
             $mysqli = new mysqli($host, $username, $password, $database, $port, $socket);
         } catch (mysqli_sql_exception $e) {
-            $connectionType = $persistent ? 'persistent' : 'regular';
             throw new PoolException(
-                "MySQLi {$connectionType} connection failed: " . $e->getMessage(),
+                "MySQLi Connection failed: " . $e->getMessage(),
                 0,
                 $e
             );
         }
 
         if ($mysqli->connect_error !== null) {
-            $connectionType = $persistent ? 'persistent' : 'regular';
             throw new PoolException(
-                "MySQLi {$connectionType} connection failed: " . $mysqli->connect_error
+                "MySQLi Connection failed: " . $mysqli->connect_error
             );
         }
 
