@@ -55,6 +55,7 @@ final class AsyncMySQLConnection
      *                                          - socket: Unix socket path (optional)
      *                                          - charset: Character set (optional, default: 'utf8mb4')
      *                                          - options: Array of mysqli options (optional, e.g., [MYSQLI_OPT_INT_AND_FLOAT_NATIVE => true])
+     *                                          - persistent: Whether to use persistent connections (optional, default: false)
      * @param  int  $poolSize  Maximum number of connections in the pool
      *
      * @throws ConfigurationException If configuration is invalid

@@ -42,6 +42,7 @@ final class MySQL
      *                                          - port: Database port (optional, must be positive integer)
      *                                          - socket: Unix socket path (optional)
      *                                          - charset: Character set (optional, default: 'utf8mb4')
+     *                                          - persistent: Whether to use persistent connections (optional, default: false)
      * @param  int  $poolSize  Maximum number of connections in the pool
      * @return void
      *
