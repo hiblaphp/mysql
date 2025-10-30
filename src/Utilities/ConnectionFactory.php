@@ -18,13 +18,14 @@ final class ConnectionFactory
      * Creates a new MySQLi connection from configuration.
      *
      * @param  array<string, mixed>  $config  Database configuration.
+     * @param  bool  $persistent  Whether to create a persistent connection.
      * @return mysqli The newly created and configured connection.
      *
      * @throws RuntimeException If connection or configuration fails.
      */
-    public static function create(array $config): mysqli
+    public static function create(array $config, bool $persistent = false): mysqli
     {
-        $mysqli = self::createConnection($config);
+        $mysqli = self::createConnection($config, $persistent);
         self::applyOptions($mysqli, $config);
         self::setCharset($mysqli, $config);
 
@@ -34,12 +35,22 @@ final class ConnectionFactory
     /**
      * Creates a new MySQLi connection with basic parameters.
      *
+     * For persistent connections, the host is prefixed with 'p:' which triggers
+     * PHP's built-in persistent connection mechanism. PHP automatically handles:
+     * - Connection pooling per PHP process
+     * - Connection cleanup via mysqli_change_user() before reuse
+     * - State reset (rollback transactions, temp tables, user variables, etc.)
+     *
+     * Persistent connections are identified by the combination of:
+     * host, username, password, database, port, and socket.
+     *
      * @param  array<string, mixed>  $config  Database configuration.
+     * @param  bool  $persistent  Whether to create a persistent connection.
      * @return mysqli The newly created connection.
      *
      * @throws PoolException If connection fails.
      */
-    private static function createConnection(array $config): mysqli
+    private static function createConnection(array $config, bool $persistent): mysqli
     {
         $host = self::getStringOrNull($config, 'host');
         $username = self::getStringOrNull($config, 'username');
@@ -48,15 +59,27 @@ final class ConnectionFactory
         $port = self::getIntOrNull($config, 'port');
         $socket = self::getStringOrNull($config, 'socket');
 
+        if ($persistent && $host !== null && !str_starts_with($host, 'p:')) {
+            $host = 'p:' . $host;
+        }
+
         try {
             mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
             $mysqli = new mysqli($host, $username, $password, $database, $port, $socket);
         } catch (mysqli_sql_exception $e) {
-            throw new PoolException('MySQLi Connection failed: ' . $e->getMessage(), 0, $e);
+            $connectionType = $persistent ? 'persistent' : 'regular';
+            throw new PoolException(
+                "MySQLi {$connectionType} connection failed: " . $e->getMessage(),
+                0,
+                $e
+            );
         }
 
         if ($mysqli->connect_error !== null) {
-            throw new PoolException('MySQLi Connection failed: ' . $mysqli->connect_error);
+            $connectionType = $persistent ? 'persistent' : 'regular';
+            throw new PoolException(
+                "MySQLi {$connectionType} connection failed: " . $mysqli->connect_error
+            );
         }
 
         return $mysqli;

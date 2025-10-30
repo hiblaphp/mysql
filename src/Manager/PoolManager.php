@@ -21,6 +21,11 @@ use Throwable;
  * This class manages a pool of MySQLi connections to provide efficient, non-blocking
  * database access in an asynchronous environment. It handles connection limits,
  * waiting queues, and safe connection reuse.
+ * 
+ * Note: When using persistent connections (persistent => true), PHP's built-in
+ * mysqli persistent connection mechanism is used, which pools connections per PHP
+ * process. This pool manager still provides value by managing connection limits
+ * and async access patterns within your application.
  */
 class PoolManager
 {
@@ -60,9 +65,20 @@ class PoolManager
     private bool $configValidated = false;
 
     /**
+     * @var bool Whether to use persistent connections (mysqli with 'p:' prefix).
+     */
+    private bool $persistent = false;
+
+    /**
      * Creates a new MySQLi connection pool.
      *
      * @param  array<string, mixed>  $dbConfig  Database configuration array.
+     *                                          Can include 'persistent' => true to enable persistent connections.
+     *                                          
+     *                                          Note: Persistent connections are pooled by PHP per-process based on
+     *                                          host, username, password, socket, port, and database. Each unique
+     *                                          combination creates a separate persistent connection pool at the
+     *                                          PHP level.
      * @param  int  $maxSize  Maximum number of concurrent connections.
      *
      * @throws InvalidArgumentException If the configuration is invalid or pool size is less than 1.
@@ -72,6 +88,10 @@ class PoolManager
         $this->validatePoolSize($maxSize);
         ConfigValidator::validate($dbConfig);
         $this->configValidated = true;
+
+        $this->persistent = (bool) ($dbConfig['persistent'] ?? false);
+        unset($dbConfig['persistent']);
+
         $this->dbConfig = $dbConfig;
         $this->maxSize = $maxSize;
         $this->pool = new SplQueue();
@@ -100,7 +120,7 @@ class PoolManager
             $this->activeConnections++;
 
             try {
-                $connection = ConnectionFactory::create($this->dbConfig);
+                $connection = $this->createConnection();
                 $this->lastConnection = $connection;
 
                 /** @var PromiseInterface<mysqli> $promise */
@@ -138,7 +158,7 @@ class PoolManager
                 $promise = $this->waiters->dequeue();
 
                 try {
-                    $newConnection = ConnectionFactory::create($this->dbConfig);
+                    $newConnection = $this->createConnection();
                     $this->lastConnection = $newConnection;
                     $promise->resolve($newConnection);
                 } catch (Throwable $e) {
@@ -185,11 +205,30 @@ class PoolManager
             'waiting_requests' => $this->waiters->count(),
             'max_size' => $this->maxSize,
             'config_validated' => $this->configValidated,
+            'persistent' => $this->persistent,
         ];
     }
 
     /**
+     * Checks if persistent connections are enabled.
+     *
+     * When enabled, PHP's built-in mysqli persistent connection mechanism is used.
+     * Persistent connections are pooled per PHP process and reused across requests
+     * based on the combination of host, username, password, socket, port, and database.
+     *
+     * @return bool True if using persistent connections.
+     */
+    public function isPersistent(): bool
+    {
+        return $this->persistent;
+    }
+
+    /**
      * Closes all connections and clears the pool.
+     *
+     * Note: For persistent connections, mysqli::close() returns the connection to
+     * PHP's persistent connection pool rather than actually closing it. The connection
+     * may be reused by other parts of the application or future requests.
      *
      * @return void
      */
@@ -230,5 +269,22 @@ class PoolManager
                 )
             );
         }
+    }
+
+    /**
+     * Creates a new MySQLi connection.
+     *
+     * For persistent connections, the 'p:' prefix is added to the hostname
+     * which triggers PHP's built-in persistent connection mechanism. PHP will
+     * automatically handle connection pooling and cleanup (via mysqli_change_user)
+     * before returning connections from its persistent pool.
+     *
+     * @return mysqli The newly created connection.
+     *
+     * @throws PoolException If connection fails.
+     */
+    private function createConnection(): mysqli
+    {
+        return ConnectionFactory::create($this->dbConfig, $this->persistent);
     }
 }
