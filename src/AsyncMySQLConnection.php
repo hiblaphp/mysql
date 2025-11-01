@@ -14,6 +14,8 @@ use Hibla\MySQL\Manager\PoolManager;
 use Hibla\MySQL\Manager\TransactionManager;
 use Hibla\MySQL\Utilities\QueryExecutor;
 use Hibla\Promise\Interfaces\PromiseInterface;
+use Hibla\MySQL\Utilities\Transaction;
+use Hibla\MySQL\Enums\IsolationLevel;
 use mysqli;
 
 use function Hibla\async;
@@ -242,29 +244,36 @@ final class AsyncMySQLConnection
     /**
      * Executes multiple operations within a database transaction.
      *
-     * Automatically handles transaction begin/commit/rollback. If the callback
-     * throws an exception, the transaction is rolled back and retried based on
-     * the specified number of attempts. All retry attempts are made with exponential
+     * Automatically handles transaction begin/commit/rollback. The callback receives
+     * a Transaction object for executing queries within the transaction context.
+     * If the callback throws an exception, the transaction is rolled back and retried
+     * based on the specified number of attempts. All retry attempts are made with exponential
      * backoff between attempts.
      *
      * Registered onCommit() callbacks are executed after successful commit.
      * Registered onRollback() callbacks are executed after rollback.
      *
-     * @param  callable(mysqli): mixed  $callback  Transaction callback receiving mysqli instance
+     * @param  callable(Transaction): mixed  $callback  Transaction callback receiving Transaction object
      * @param  int  $attempts  Number of times to attempt the transaction (default: 1)
+     * @param  IsolationLevel|null  $isolationLevel  Transaction isolation level (optional)
      * @return PromiseInterface<mixed> Promise resolving to callback's return value
      *
      * @throws NotInitializedException If this instance is not initialized
      * @throws TransactionFailedException If transaction fails after all attempts
      * @throws \InvalidArgumentException If attempts is less than 1
      */
-    public function transaction(callable $callback, int $attempts = 1): PromiseInterface
-    {
+    public function transaction(
+        callable $callback,
+        int $attempts = 1,
+        ?IsolationLevel $isolationLevel = null
+    ): PromiseInterface {
         return $this->getTransactionManager()->executeTransaction(
             fn() => $this->getPool()->get(),
             fn($connection) => $this->getPool()->release($connection),
             $callback,
-            $attempts
+            $this->getQueryExecutor(),
+            $attempts,
+            $isolationLevel
         );
     }
 

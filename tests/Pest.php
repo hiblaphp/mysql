@@ -15,35 +15,51 @@ expect()->extend('toBeConnectionId', function () {
 
 function createPersistentConnection(int $poolSize = 10): AsyncMySQLConnection
 {
-    return new AsyncMySQLConnection([
-        'host' => env('MYSQL_HOST', 'localhost'),
-        'port' => (int) env('MYSQL_PORT', 3306),
-        'database' => env('MYSQL_DATABASE', 'test'),
-        'username' => env('MYSQL_USERNAME', 'root'),
-        'password' => env('MYSQL_PASSWORD', ''),
+    $isCI = (bool) getenv('CI');
+
+    $defaultHost = $isCI ? '127.0.0.1' : 'localhost';
+
+    $config = [
+        'driver' => 'mysql',
+        'host' => $defaultHost,
+        'port' => (int) (getenv('MYSQL_PORT') ?: 3306),
+        'database' => getenv('MYSQL_DATABASE') ?: 'test',
+        'username' => getenv('MYSQL_USERNAME') ?: 'root',
+        'password' => getenv('MYSQL_PASSWORD') ?: '',
+        'charset' => 'utf8mb4',
         'persistent' => true,
-    ], $poolSize);
+    ];
+
+    return new AsyncMySQLConnection($config, $poolSize);
 }
 
 function createRegularConnection(int $poolSize = 10): AsyncMySQLConnection
 {
-    return new AsyncMySQLConnection([
-        'host' => env('MYSQL_HOST', 'localhost'),
-        'port' => (int) env('MYSQL_PORT', 3306),
-        'database' => env('MYSQL_DATABASE', 'test'),
-        'username' => env('MYSQL_USERNAME', 'root'),
-        'password' => env('MYSQL_PASSWORD', ''),
+    $isCI = (bool) getenv('CI');
+
+    $defaultHost = $isCI ? '127.0.0.1' : 'localhost';
+
+    $config = [
+        'driver' => 'mysql',
+        'host' => $defaultHost,
+        'port' => (int) (getenv('MYSQL_PORT') ?: 3306),
+        'database' => getenv('MYSQL_DATABASE') ?: 'test',
+        'username' => getenv('MYSQL_USERNAME') ?: 'root',
+        'password' => getenv('MYSQL_PASSWORD') ?: '',
+        'charset' => 'utf8mb4',
         'persistent' => false,
-    ], $poolSize);
+    ];
+
+    return new AsyncMySQLConnection($config, $poolSize);
 }
 
 function env(string $key, mixed $default = null): mixed
 {
     $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
-    
+
     if ($value === false) {
         return $default;
     }
-    
+
     return $value;
 }

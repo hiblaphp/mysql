@@ -189,7 +189,7 @@ final class QueryExecutor
     private function getStatementResult(string $sql, mysqli_stmt $stmt): mysqli_result|bool
     {
         $trimmedSql = trim($sql);
-        
+
         if (
             stripos($trimmedSql, 'SELECT') === 0 ||
             stripos($trimmedSql, 'SHOW') === 0 ||

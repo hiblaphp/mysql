@@ -7,6 +7,8 @@ use Hibla\MySQL\Exceptions\TransactionFailedException;
 use Hibla\Promise\Promise;
 use Tests\Helpers\TestHelper;
 
+use function Hibla\sleep;
+
 describe('AsyncMySQLConnection Transactions', function () {
     it('commits successful transaction', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
@@ -20,9 +22,9 @@ describe('AsyncMySQLConnection Transactions', function () {
             )
         ')->await();
 
-        $result = $db->transaction(function ($conn) {
-            mysqli_query($conn, "INSERT INTO accounts (name, balance) VALUES ('Alice', 1000.00)");
-            mysqli_query($conn, "INSERT INTO accounts (name, balance) VALUES ('Bob', 2000.00)");
+        $result = $db->transaction(function ($trx) {
+            await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Alice', 1000.00], 'sd'));
+            await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Bob', 2000.00], 'sd'));
 
             return 'success';
         })->await();
@@ -48,8 +50,8 @@ describe('AsyncMySQLConnection Transactions', function () {
         ')->await();
 
         try {
-            $db->transaction(function ($conn) {
-                mysqli_query($conn, "INSERT INTO accounts (name, balance) VALUES ('Charlie', 500.00)");
+            $db->transaction(function ($trx) {
+                await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Charlie', 500.00], 'sd'));
 
                 throw new Exception('Simulated error');
             })->await();
@@ -78,18 +80,11 @@ describe('AsyncMySQLConnection Transactions', function () {
         $db->execute("INSERT INTO accounts (name, balance) VALUES ('Alice', 1000.00)")->await();
         $db->execute("INSERT INTO accounts (name, balance) VALUES ('Bob', 500.00)")->await();
 
-        $db->transaction(function ($conn) {
+        $db->transaction(function ($trx) {
             $transferAmount = 300.00;
 
-            $stmt = mysqli_prepare($conn, 'UPDATE accounts SET balance = balance - ? WHERE name = ?');
-            mysqli_stmt_bind_param($stmt, 'ds', $transferAmount, $name);
-            $name = 'Alice';
-            mysqli_stmt_execute($stmt);
-
-            $stmt = mysqli_prepare($conn, 'UPDATE accounts SET balance = balance + ? WHERE name = ?');
-            mysqli_stmt_bind_param($stmt, 'ds', $transferAmount, $name);
-            $name = 'Bob';
-            mysqli_stmt_execute($stmt);
+            await($trx->execute('UPDATE accounts SET balance = balance - ? WHERE name = ?', [$transferAmount, 'Alice'], 'ds'));
+            await($trx->execute('UPDATE accounts SET balance = balance + ? WHERE name = ?', [$transferAmount, 'Bob'], 'ds'));
         })->await();
 
         $aliceBalance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Alice'")->await();
@@ -117,10 +112,10 @@ describe('AsyncMySQLConnection Transactions', function () {
         $attempts = 0;
 
         try {
-            $db->transaction(function ($conn) use (&$attempts) {
+            $db->transaction(function ($trx) use (&$attempts) {
                 $attempts++;
 
-                mysqli_query($conn, "INSERT INTO accounts (name, balance) VALUES ('David', 100.00)");
+                await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['David', 100.00], 'sd'));
 
                 if ($attempts < 3) {
                     throw new Exception('Retry me');
@@ -155,7 +150,7 @@ describe('AsyncMySQLConnection Transactions', function () {
         $attempts = 0;
 
         expect(function () use ($db, &$attempts) {
-            $db->transaction(function ($conn) use (&$attempts) {
+            $db->transaction(function ($trx) use (&$attempts) {
                 $attempts++;
 
                 throw new Exception('Always fail');
@@ -179,9 +174,11 @@ describe('AsyncMySQLConnection Transactions', function () {
             )
         ')->await();
 
-        $insertedId = $db->transaction(function ($conn) {
-            $result = mysqli_query($conn, "INSERT INTO accounts (name, balance) VALUES ('Eve', 750.00)");
-            return mysqli_insert_id($conn);
+        $insertedId = $db->transaction(function ($trx) {
+            await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Eve', 750.00], 'sd'));
+            $insertedId = await($trx->fetchValue("SELECT LAST_INSERT_ID()"));
+
+            return $insertedId;
         })->await();
 
         expect($insertedId)->toBeInt();
@@ -204,23 +201,75 @@ describe('AsyncMySQLConnection Transactions', function () {
             )
         ')->await();
 
-        $db->transaction(function ($conn) {
-            mysqli_query($conn, "INSERT INTO accounts (name, balance) VALUES ('Frank', 1500.00)");
+        $db->transaction(function ($trx) {
+            await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Frank', 1500.00], 'sd'));
 
-            $result = mysqli_query($conn, "SELECT * FROM accounts WHERE name = 'Frank'");
-            $account = mysqli_fetch_assoc($result);
+            $account = await($trx->fetchOne("SELECT * FROM accounts WHERE name = ?", ['Frank'], 's'));
 
             expect($account['balance'])->toBe('1500.00');
 
-            $stmt = mysqli_prepare($conn, 'UPDATE accounts SET balance = ? WHERE name = ?');
-            $balance = 2000.00;
-            $name = 'Frank';
-            mysqli_stmt_bind_param($stmt, 'ds', $balance, $name);
-            mysqli_stmt_execute($stmt);
+            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [2000.00, 'Frank'], 'ds'));
         })->await();
 
         $balance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Frank'")->await();
         expect($balance)->toBe('2000.00');
+
+        $db->execute('DROP TABLE IF EXISTS accounts')->await();
+    });
+
+    it('enforces isolation by preventing concurrent updates to same row', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $db->execute('DROP TABLE IF EXISTS accounts')->await();
+        $db->execute('
+        CREATE TABLE accounts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            balance DECIMAL(10, 2) NOT NULL DEFAULT 0,
+            INDEX idx_name (name)
+        ) ENGINE=InnoDB')->await();
+
+        $db->execute("INSERT INTO accounts (name, balance) VALUES ('Grace', 1000.00)")->await();
+
+        $db->execute("SET SESSION innodb_lock_wait_timeout = 2")->await();
+
+        $executionLog = [];
+
+        $promise1 = $db->transaction(function ($trx) use (&$executionLog) {
+            await($trx->execute("SET SESSION innodb_lock_wait_timeout = 2"));
+
+            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Grace'], 's'));
+            $executionLog[] = 'T1-locked';
+            $currentBalance = (float)$row['balance'];
+            Hibla\sleep(3);
+
+            $newBalance = $currentBalance + 100;
+            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds'));
+            $executionLog[] = 'T1-complete';
+
+            return $currentBalance + 100;
+        });
+
+        $promise2 = $db->transaction(function ($trx) use (&$executionLog) {
+            await($trx->execute("SET SESSION innodb_lock_wait_timeout = 2"));
+
+            $executionLog[] = 'T2-attempting';
+            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Grace'], 's'));
+            $executionLog[] = 'T2-locked'; 
+            $currentBalance = (float)$row['balance'];
+
+            $newBalance = $currentBalance + 200;
+            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds'));
+
+            return $currentBalance + 200;
+        });
+
+        expect(fn() => Promise::all([$promise1, $promise2])->await())
+            ->toThrow(TransactionFailedException::class);
+
+        expect($executionLog)->toContain('T1-locked')
+            ->and($executionLog)->toContain('T2-attempting')
+            ->and($executionLog)->not->toContain('T2-locked');
 
         $db->execute('DROP TABLE IF EXISTS accounts')->await();
     });
@@ -233,44 +282,168 @@ describe('AsyncMySQLConnection Transactions', function () {
         CREATE TABLE accounts (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
-            balance DECIMAL(10, 2) NOT NULL DEFAULT 0
+            balance DECIMAL(10, 2) NOT NULL DEFAULT 0,
+            INDEX idx_name (name)  -- ADD THIS!
         ) ENGINE=InnoDB
     ')->await();
 
         $db->execute("INSERT INTO accounts (name, balance) VALUES ('Grace', 1000.00)")->await();
+        $db->execute("INSERT INTO accounts (name, balance) VALUES ('Henry', 2000.00)")->await();
 
-        $promise1 = $db->transaction(function ($conn) {
-            $result = mysqli_query($conn, "SELECT balance FROM accounts WHERE name = 'Grace' FOR UPDATE");
-            $row = mysqli_fetch_assoc($result);
-            $currentBalance = (float)$row['balance'];
+        $executionLog = [];
+        $startTime = microtime(true);
 
-            $stmt = mysqli_prepare($conn, 'UPDATE accounts SET balance = ? WHERE name = ?');
-            $newBalance = $currentBalance + 100;
-            $name = 'Grace';
-            mysqli_stmt_bind_param($stmt, 'ds', $newBalance, $name);
-            mysqli_stmt_execute($stmt);
+        $promise1 = $db->transaction(function ($trx) use (&$executionLog) {
+            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Grace'], 's'));
+            $executionLog[] = 'T1-start';
 
-            return $currentBalance + 100;
+            Hibla\sleep(0.1);
+
+            $newBalance = (float)$row['balance'] + 100;
+            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds'));
+            $executionLog[] = 'T1-end';
         });
 
-        $promise2 = $db->transaction(function ($conn) {
-            $result = mysqli_query($conn, "SELECT balance FROM accounts WHERE name = 'Grace' FOR UPDATE");
-            $row = mysqli_fetch_assoc($result);
-            $currentBalance = (float)$row['balance'];
+        $promise2 = $db->transaction(function ($trx) use (&$executionLog) {
+            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Henry'], 's'));
+            $executionLog[] = 'T2-start';
 
-            $stmt = mysqli_prepare($conn, 'UPDATE accounts SET balance = ? WHERE name = ?');
-            $newBalance = $currentBalance + 200;
-            $name = 'Grace';
-            mysqli_stmt_bind_param($stmt, 'ds', $newBalance, $name);
-            mysqli_stmt_execute($stmt);
+            Hibla\sleep(0.1);
 
-            return $currentBalance + 200;
+            $newBalance = (float)$row['balance'] + 200;
+            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Henry'], 'ds'));
+            $executionLog[] = 'T2-end';
         });
 
         Promise::all([$promise1, $promise2])->await();
 
-        $finalBalance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Grace'")->await();
-        expect((float)$finalBalance)->toBe(1300.00);
+        $duration = microtime(true) - $startTime;
+
+        expect($duration)->toBeLessThan(0.18);
+
+        expect($executionLog)->toHaveCount(4);
+
+        $graceBalance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Grace'")->await();
+        $henryBalance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Henry'")->await();
+
+        expect((float)$graceBalance)->toBe(1100.00)
+            ->and((float)$henryBalance)->toBe(2200.00);
+
+        $db->execute('DROP TABLE IF EXISTS accounts')->await();
+    });
+
+    it('executes truly concurrent transactions on different rows', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $db->execute('DROP TABLE IF EXISTS accounts')->await();
+        $db->execute('
+        CREATE TABLE accounts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            balance DECIMAL(10, 2) NOT NULL DEFAULT 0,
+            INDEX idx_name (name)
+        ) ENGINE=InnoDB')->await();
+
+        $db->execute("INSERT INTO accounts (name, balance) VALUES ('Grace', 1000.00)")->await();
+        $db->execute("INSERT INTO accounts (name, balance) VALUES ('Henry', 2000.00)")->await();
+
+        $executionLog = [];
+        $startTime = microtime(true);
+
+        $promise1 = $db->transaction(function ($trx) use (&$executionLog) {
+            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Grace'], 's'));
+            $executionLog[] = 'T1-start';
+
+            $newBalance = (float)$row['balance'] + 100;
+            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds'));
+            $executionLog[] = 'T1-end';
+        });
+
+        $promise2 = $db->transaction(function ($trx) use (&$executionLog) {
+            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Henry'], 's'));
+            $executionLog[] = 'T2-start';
+
+            $newBalance = (float)$row['balance'] + 200;
+            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Henry'], 'ds'));
+            $executionLog[] = 'T2-end';
+        });
+
+        Promise::all([$promise1, $promise2])->await();
+
+        $duration = microtime(true) - $startTime;
+
+        expect($duration)->toBeLessThan(0.18);
+
+        expect($executionLog)->toContain('T1-start')
+            ->and($executionLog)->toContain('T2-start')
+            ->and($executionLog)->toContain('T1-end')
+            ->and($executionLog)->toContain('T2-end');
+
+        $graceBalance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Grace'")->await();
+        $henryBalance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Henry'")->await();
+
+        expect((float)$graceBalance)->toBe(1100.00)
+            ->and((float)$henryBalance)->toBe(2200.00);
+
+        $db->execute('DROP TABLE IF EXISTS accounts')->await();
+    });
+
+    it('executes onCommit callback', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $db->execute('DROP TABLE IF EXISTS accounts')->await();
+        $db->execute('
+            CREATE TABLE accounts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                balance DECIMAL(10, 2) NOT NULL DEFAULT 0
+            )
+        ')->await();
+
+        $commitCalled = false;
+
+        $db->transaction(function ($trx) use (&$commitCalled) {
+            await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Helen', 500.00], 'sd'));
+
+            $trx->onCommit(function () use (&$commitCalled) {
+                $commitCalled = true;
+            });
+        })->await();
+
+        expect($commitCalled)->toBeTrue();
+
+        $db->execute('DROP TABLE IF EXISTS accounts')->await();
+    });
+
+    it('executes onRollback callback', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $db->execute('DROP TABLE IF EXISTS accounts')->await();
+        $db->execute('
+            CREATE TABLE accounts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                balance DECIMAL(10, 2) NOT NULL DEFAULT 0
+            )
+        ')->await();
+
+        $rollbackCalled = false;
+
+        try {
+            $db->transaction(function ($trx) use (&$rollbackCalled) {
+                await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Ivan', 300.00], 'sd'));
+
+                $trx->onRollback(function () use (&$rollbackCalled) {
+                    $rollbackCalled = true;
+                });
+
+                throw new Exception('Force rollback');
+            })->await();
+        } catch (TransactionFailedException $e) {
+            // Expected
+        }
+
+        expect($rollbackCalled)->toBeTrue();
 
         $db->execute('DROP TABLE IF EXISTS accounts')->await();
     });

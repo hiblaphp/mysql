@@ -8,15 +8,21 @@ class TestHelper
 {
     public static function getTestConfig(): array
     {
+        $isCI = (bool) getenv('CI');
+
+        $defaultHost = $isCI ? '127.0.0.1' : 'localhost';
+
         return [
-            'host' => $_ENV['MYSQL_HOST'],
-            'username' => $_ENV['MYSQL_USERNAME'],
-            'database' => $_ENV['MYSQL_DATABASE'],
-            'password' => $_ENV['MYSQL_PASSWORD'],
-            'port' => (int) $_ENV['MYSQL_PORT'],
+            'driver' => 'mysql',
+            'host' => $defaultHost,
+            'port' => (int) (getenv('MYSQL_PORT') ?: 3306),
+            'database' => getenv('MYSQL_DATABASE') ?: 'test',
+            'username' => getenv('MYSQL_USERNAME') ?: 'root',
+            'password' => getenv('MYSQL_PASSWORD') ?: '',
+            'charset' => 'utf8mb4',
             'options' => [
                 MYSQLI_OPT_INT_AND_FLOAT_NATIVE => true,
-            ],
+            ]           
         ];
     }
 }

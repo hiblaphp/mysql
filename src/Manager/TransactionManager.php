@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Hibla\MySQL\Manager;
 
+use Hibla\MySQL\Enums\IsolationLevel;
 use Hibla\MySQL\Exceptions\NotInTransactionException;
 use Hibla\MySQL\Exceptions\TransactionException;
 use Hibla\MySQL\Exceptions\TransactionFailedException;
+use Hibla\MySQL\Utilities\QueryExecutor;
+use Hibla\MySQL\Utilities\Transaction;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use mysqli;
 use Throwable;
@@ -19,12 +22,15 @@ use function Hibla\await;
  * Manages database transactions and their callbacks.
  * 
  * This class handles transaction lifecycle including begin/commit/rollback operations,
- * retry logic, and execution of registered callbacks.
+ * retry logic, isolation level management, and execution of registered callbacks.
  */
 final class TransactionManager
 {
     /** @var WeakMap<mysqli, array{commit: list<callable(): void>, rollback: list<callable(): void>, fiber: \Fiber<mixed, mixed, mixed, mixed>|null}> Transaction callbacks using WeakMap */
     private WeakMap $transactionCallbacks;
+
+    /** @var mysqli|null Current transaction mysqli connection for the active fiber tree */
+    private ?mysqli $currentTransactionConnection = null;
 
     /**
      * Creates a new TransactionManager instance.
@@ -111,19 +117,21 @@ final class TransactionManager
     }
 
     /**
-     * Executes a transaction with retry logic.
+     * Executes a transaction with retry logic and optional isolation level.
      *
-     * Automatically handles transaction begin/commit/rollback. If the callback
-     * throws an exception, the transaction is rolled back and retried based on
-     * the specified number of attempts.
+     * Automatically handles transaction begin/commit/rollback. The callback receives
+     * a Transaction object for executing queries. If the callback throws an exception,
+     * the transaction is rolled back and retried based on the specified number of attempts.
      *
      * Registered onCommit() callbacks are executed after successful commit.
      * Registered onRollback() callbacks are executed after rollback.
      *
      * @param  callable(): PromiseInterface<mysqli>  $getConnection  Callback to acquire connection
      * @param  callable(mysqli): void  $releaseConnection  Callback to release connection
-     * @param  callable(mysqli): mixed  $callback  Transaction callback receiving mysqli instance
+     * @param  callable(Transaction): mixed  $callback  Transaction callback receiving Transaction object
+     * @param  QueryExecutor  $queryExecutor  Query executor instance
      * @param  int  $attempts  Number of times to attempt the transaction
+     * @param  IsolationLevel|null  $isolationLevel  Transaction isolation level (optional)
      * @return PromiseInterface<mixed> Promise resolving to callback's return value
      *
      * @throws TransactionFailedException If transaction fails after all attempts
@@ -133,9 +141,11 @@ final class TransactionManager
         callable $getConnection,
         callable $releaseConnection,
         callable $callback,
-        int $attempts
+        QueryExecutor $queryExecutor,
+        int $attempts,
+        ?IsolationLevel $isolationLevel = null
     ): PromiseInterface {
-        return async(function () use ($getConnection, $releaseConnection, $callback, $attempts) {
+        return async(function () use ($getConnection, $releaseConnection, $callback, $queryExecutor, $attempts, $isolationLevel) {
             if ($attempts < 1) {
                 throw new \InvalidArgumentException('Transaction attempts must be at least 1.');
             }
@@ -143,15 +153,25 @@ final class TransactionManager
             /** @var Throwable|null $lastException */
             $lastException = null;
 
+            /** @var list<array{attempt: int, error: string, time: float}> */
+            $attemptHistory = [];
+
             for ($currentAttempt = 1; $currentAttempt <= $attempts; $currentAttempt++) {
                 $connection = null;
+                $startTime = microtime(true);
 
                 try {
                     $connection = await($getConnection());
-                    $result = await($this->runTransaction($connection, $callback));
+                    $result = await($this->runTransaction($connection, $callback, $queryExecutor, $isolationLevel));
                     return $result;
                 } catch (Throwable $e) {
                     $lastException = $e;
+
+                    $attemptHistory[] = [
+                        'attempt' => $currentAttempt,
+                        'error' => $e->getMessage(),
+                        'time' => microtime(true) - $startTime,
+                    ];
 
                     if ($currentAttempt < $attempts) {
                         continue;
@@ -164,7 +184,8 @@ final class TransactionManager
                             $e->getMessage()
                         ),
                         $attempts,
-                        $e
+                        $e,
+                        $attemptHistory
                     );
                 } finally {
                     if ($connection !== null) {
@@ -177,7 +198,8 @@ final class TransactionManager
                 throw new TransactionFailedException(
                     sprintf('Transaction failed after %d attempt(s)', $attempts),
                     $attempts,
-                    $lastException
+                    $lastException,
+                    $attemptHistory  
                 );
             }
 
@@ -188,19 +210,25 @@ final class TransactionManager
     /**
      * Runs a single transaction attempt.
      *
-     * Executes BEGIN TRANSACTION, runs the callback, and either COMMIT or ROLLBACK based on success.
+     * Executes BEGIN TRANSACTION, creates Transaction object, runs callback, and either COMMIT or ROLLBACK.
      * Manages transaction state and executes appropriate callbacks.
      *
      * @param  mysqli  $connection  MySQL connection
-     * @param  callable(mysqli): mixed  $callback  Transaction callback
+     * @param  callable(Transaction): mixed  $callback  Transaction callback receiving Transaction object
+     * @param  QueryExecutor  $queryExecutor  Query executor instance
+     * @param  IsolationLevel|null  $isolationLevel  Transaction isolation level (optional)
      * @return PromiseInterface<mixed> Promise resolving to callback's return value
      *
-     * @throws TransactionException If BEGIN or COMMIT fails
+     * @throws TransactionException If BEGIN, COMMIT, or isolation level setting fails
      * @throws Throwable If callback throws (after ROLLBACK)
      */
-    private function runTransaction(mysqli $connection, callable $callback): PromiseInterface
-    {
-        return async(function () use ($connection, $callback) {
+    private function runTransaction(
+        mysqli $connection,
+        callable $callback,
+        QueryExecutor $queryExecutor,
+        ?IsolationLevel $isolationLevel = null
+    ): PromiseInterface {
+        return async(function () use ($connection, $callback, $queryExecutor, $isolationLevel) {
             $currentFiber = \Fiber::getCurrent();
 
             /** @var array{commit: list<callable(): void>, rollback: list<callable(): void>, fiber: \Fiber<mixed, mixed, mixed, mixed>|null} $initialState */
@@ -212,15 +240,27 @@ final class TransactionManager
 
             $this->transactionCallbacks[$connection] = $initialState;
 
-            $connection->autocommit(false);
-            if (!$connection->begin_transaction()) {
-                throw new TransactionException(
-                    'Failed to begin transaction: ' . $connection->error
-                );
-            }
+            $previousTransactionConnection = $this->currentTransactionConnection;
+            $this->currentTransactionConnection = $connection;
 
             try {
-                $result = $callback($connection);
+                if ($isolationLevel !== null) {
+                    $this->setIsolationLevel($connection, $isolationLevel);
+                }
+
+                $connection->autocommit(false);
+                if (!$connection->begin_transaction()) {
+                    throw new TransactionException(
+                        'Failed to begin transaction: ' . $connection->error
+                    );
+                }
+
+                $transaction = new Transaction($connection, $queryExecutor, $this);
+                $result = $callback($transaction);
+
+                if ($result instanceof PromiseInterface) {
+                    $result = await($result);
+                }
 
                 if (!$connection->commit()) {
                     throw new TransactionException(
@@ -240,6 +280,8 @@ final class TransactionManager
 
                 throw $e;
             } finally {
+                $this->currentTransactionConnection = $previousTransactionConnection;
+
                 if (isset($this->transactionCallbacks[$connection])) {
                     unset($this->transactionCallbacks[$connection]);
                 }
@@ -248,24 +290,15 @@ final class TransactionManager
     }
 
     /**
-     * Gets the current transaction's mysqli instance if in a transaction within the current fiber.
+     * Gets the current transaction's mysqli instance if in a transaction.
      *
-     * This method checks if the current fiber is executing within a transaction context
-     * and returns the associated connection if found.
+     * This method returns the mysqli connection for the active transaction context.
      *
      * @return mysqli|null Connection instance or null if not in transaction
      */
-    private function getCurrentTransactionConnection(): ?mysqli
+    public function getCurrentTransactionConnection(): ?mysqli
     {
-        $currentFiber = \Fiber::getCurrent();
-
-        foreach ($this->transactionCallbacks as $connection => $data) {
-            if ($data['fiber'] === $currentFiber) {
-                return $connection;
-            }
-        }
-
-        return null;
+        return $this->currentTransactionConnection;
     }
 
     /**
@@ -315,6 +348,33 @@ final class TransactionManager
                 ),
                 0,
                 $exceptions[0]
+            );
+        }
+    }
+
+    /**
+     * Sets the transaction isolation level for the connection.
+     *
+     * This method sets the isolation level for the current session.
+     * The isolation level must be set before BEGIN TRANSACTION is called.
+     *
+     * @param  mysqli  $connection  MySQL connection
+     * @param  IsolationLevel  $isolationLevel  Desired isolation level
+     * @return void
+     *
+     * @throws TransactionException If setting isolation level fails
+     */
+    private function setIsolationLevel(mysqli $connection, IsolationLevel $isolationLevel): void
+    {
+        $sql = "SET SESSION TRANSACTION ISOLATION LEVEL {$isolationLevel->value}";
+
+        if ($connection->query($sql) === false) {
+            throw new TransactionException(
+                sprintf(
+                    'Failed to set isolation level to %s: %s',
+                    $isolationLevel->value,
+                    $connection->error
+                )
             );
         }
     }

@@ -2,6 +2,8 @@
 
 use Hibla\Promise\Promise;
 
+use function Hibla\await;
+
 describe('Connection ID Persistence', function () {
     it('reuses connection IDs within the same persistent client instance', function () {
         $client = createPersistentConnection();
@@ -116,9 +118,9 @@ describe('Transaction Handling', function () {
     it('can start and rollback transactions on persistent connections', function () {
         $client = createPersistentConnection();
         
-        $result = $client->transaction(function ($mysqli) {
-            $result = $mysqli->query("SELECT 1 as test")->fetch_assoc();
-            return $result['test'];
+        $result = $client->transaction(function ($trx) {
+            $result = await ($trx->fetchValue("SELECT 1 as test"));
+            return $result;
         })->await();
         
         expect($result)->toBe('1');
@@ -128,15 +130,67 @@ describe('Transaction Handling', function () {
         $client = createPersistentConnection();
         
         try {
-            $client->transaction(function ($mysqli) {
-                $mysqli->query("CREATE TEMPORARY TABLE IF NOT EXISTS test_rollback (id INT)");
-                $mysqli->query("INSERT INTO test_rollback VALUES (1)");
+            $client->transaction(function ($trx) {
+                await ($trx->execute("CREATE TEMPORARY TABLE IF NOT EXISTS test_rollback (id INT)"));
+                await ($trx->execute("INSERT INTO test_rollback VALUES (1)"));
                 
                 throw new Exception("Intentional error");
             })->await();
         } catch (Exception $e) {
             expect($e->getMessage())->toContain('Intentional error');
         }
+    });
+    
+    it('executes queries within transaction context', function () {
+        $client = createPersistentConnection();
+        
+        $result = $client->transaction(function ($trx) {
+            await ($trx->execute("CREATE TEMPORARY TABLE IF NOT EXISTS test_trx (id INT, value VARCHAR(50))"));
+            await ($trx->execute("INSERT INTO test_trx VALUES (?, ?)", [1, 'test'], 'is'));
+            $row = await ($trx->fetchOne("SELECT * FROM test_trx WHERE id = ?", [1], 'i'));
+            
+            return $row['value'];
+        })->await();
+        
+        expect($result)->toBe('test');
+    });
+    
+    it('can use onCommit callback', function () {
+        $client = createPersistentConnection();
+        
+        $commitCalled = false;
+        
+        $client->transaction(function ($trx) use (&$commitCalled) {
+            await ($trx->execute("SELECT 1"));
+            
+            $trx->onCommit(function () use (&$commitCalled) {
+                $commitCalled = true;
+            });
+        })->await();
+        
+        expect($commitCalled)->toBeTrue();
+    });
+    
+    it('can use onRollback callback', function () {
+        $client = createPersistentConnection();
+        
+        $rollbackCalled = false;
+        
+        try {
+            $client->transaction(function ($trx) use (&$rollbackCalled) {
+                await ($trx->execute("SELECT 1"));
+                
+                $trx->onRollback(function () use (&$rollbackCalled) {
+                    $rollbackCalled = true;
+                });
+                
+                throw new Exception("Force rollback");
+            })->await();
+        } catch (Exception $e) {
+            // Expected
+        }
+        
+        expect($rollbackCalled)->toBeTrue();
     });
 });
 
