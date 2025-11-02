@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Hibla\MySQL\AsyncMySQLConnection;
+use Hibla\MySQL\Enums\IsolationLevel;
 use Hibla\MySQL\Exceptions\TransactionFailedException;
 use Hibla\Promise\Promise;
 use Tests\Helpers\TestHelper;
@@ -255,7 +256,7 @@ describe('AsyncMySQLConnection Transactions', function () {
 
             $executionLog[] = 'T2-attempting';
             $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Grace'], 's'));
-            $executionLog[] = 'T2-locked'; 
+            $executionLog[] = 'T2-locked';
             $currentBalance = (float)$row['balance'];
 
             $newBalance = $currentBalance + 200;
@@ -283,7 +284,7 @@ describe('AsyncMySQLConnection Transactions', function () {
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
             balance DECIMAL(10, 2) NOT NULL DEFAULT 0,
-            INDEX idx_name (name)  -- ADD THIS!
+            INDEX idx_name (name)
         ) ENGINE=InnoDB
     ')->await();
 
@@ -446,5 +447,126 @@ describe('AsyncMySQLConnection Transactions', function () {
         expect($rollbackCalled)->toBeTrue();
 
         $db->execute('DROP TABLE IF EXISTS accounts')->await();
+    });
+
+    it('uses SERIALIZABLE isolation level when specified', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $level = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        }, isolationLevel: IsolationLevel::SERIALIZABLE)->await();
+
+        expect($level)->toBe('SERIALIZABLE');
+    });
+
+    it('uses READ COMMITTED isolation level when specified', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $level = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        }, isolationLevel: IsolationLevel::READ_COMMITTED)->await();
+
+        expect($level)->toBe('READ-COMMITTED');
+    });
+
+    it('uses READ UNCOMMITTED isolation level when specified', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $level = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        }, isolationLevel: IsolationLevel::READ_UNCOMMITTED)->await();
+
+        expect($level)->toBe('READ-UNCOMMITTED');
+    });
+
+    it('defaults to REPEATABLE READ isolation level when not specified', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $level = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        })->await();
+
+        expect($level)->toBe('REPEATABLE-READ');
+    });
+
+    it('resets isolation level to REPEATABLE READ after SERIALIZABLE transaction', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $level1 = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        }, isolationLevel: IsolationLevel::SERIALIZABLE)->await();
+
+        expect($level1)->toBe('SERIALIZABLE');
+
+        $level2 = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        })->await();
+
+        expect($level2)->toBe('REPEATABLE-READ');
+    });
+
+    it('resets isolation level to REPEATABLE READ after READ COMMITTED transaction', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $level1 = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        }, isolationLevel: IsolationLevel::READ_COMMITTED)->await();
+
+        expect($level1)->toBe('READ-COMMITTED');
+
+        $level2 = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        })->await();
+
+        expect($level2)->toBe('REPEATABLE-READ');
+    });
+
+    it('maintains different isolation levels across sequential transactions', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $levels = [];
+
+        $levels[] = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        }, isolationLevel: IsolationLevel::SERIALIZABLE)->await();
+
+        $levels[] = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        })->await();
+
+        $levels[] = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        }, isolationLevel: IsolationLevel::READ_COMMITTED)->await();
+
+        $levels[] = $db->transaction(function ($trx) {
+            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+        })->await();
+
+        expect($levels)->toBe([
+            'SERIALIZABLE',
+            'REPEATABLE-READ',
+            'READ-COMMITTED',
+            'REPEATABLE-READ',
+        ]);
+    });
+
+    it('prevents isolation level pollution across concurrent transactions', function () {
+        $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
+
+        $promise1 = $db->transaction(function ($trx) {
+            $level = await($trx->fetchValue('SELECT @@transaction_isolation'));
+            sleep(0.1);
+            return $level;
+        }, isolationLevel: IsolationLevel::SERIALIZABLE);
+
+        $promise2 = $db->transaction(function ($trx) {
+            $level = await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $level;
+        });
+
+        $results = Promise::all([$promise1, $promise2])->await();
+
+        expect($results[0])->toBe('SERIALIZABLE')
+            ->and($results[1])->toBe('REPEATABLE-READ');
     });
 });

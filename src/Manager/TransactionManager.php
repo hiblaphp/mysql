@@ -199,7 +199,7 @@ final class TransactionManager
                     sprintf('Transaction failed after %d attempt(s)', $attempts),
                     $attempts,
                     $lastException,
-                    $attemptHistory  
+                    $attemptHistory
                 );
             }
 
@@ -244,11 +244,11 @@ final class TransactionManager
             $this->currentTransactionConnection = $connection;
 
             try {
-                if ($isolationLevel !== null) {
-                    $this->setIsolationLevel($connection, $isolationLevel);
-                }
-
                 $connection->autocommit(false);
+
+                $levelToSet = $isolationLevel ?? IsolationLevel::REPEATABLE_READ;
+                $this->setIsolationLevel($connection, $levelToSet);
+
                 if (!$connection->begin_transaction()) {
                     throw new TransactionException(
                         'Failed to begin transaction: ' . $connection->error
