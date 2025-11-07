@@ -94,7 +94,7 @@ describe('PoolManager Connection Release', function () {
 
         $result = $connection->query('SELECT @@autocommit as ac');
         $row = $result->fetch_assoc();
-        expect((int)$row['ac'])->toBe(0); 
+        expect((int)$row['ac'])->toBe(0);
 
         $pool->release($connection);
 

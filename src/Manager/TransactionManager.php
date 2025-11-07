@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Hibla\MySQL\Manager;
 
+use function Hibla\async;
+use function Hibla\await;
+
 use Hibla\MySQL\Enums\IsolationLevel;
 use Hibla\MySQL\Exceptions\NotInTransactionException;
 use Hibla\MySQL\Exceptions\TransactionException;
@@ -12,15 +15,13 @@ use Hibla\MySQL\Utilities\QueryExecutor;
 use Hibla\MySQL\Utilities\Transaction;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use mysqli;
+
 use Throwable;
 use WeakMap;
 
-use function Hibla\async;
-use function Hibla\await;
-
 /**
  * Manages database transactions and their callbacks.
- * 
+ *
  * This class handles transaction lifecycle including begin/commit/rollback operations,
  * retry logic, isolation level management, and execution of registered callbacks.
  */
@@ -63,7 +64,7 @@ final class TransactionManager
             );
         }
 
-        if (!isset($this->transactionCallbacks[$connection])) {
+        if (! isset($this->transactionCallbacks[$connection])) {
             throw new TransactionException('Transaction state not found.');
         }
 
@@ -101,7 +102,7 @@ final class TransactionManager
             );
         }
 
-        if (!isset($this->transactionCallbacks[$connection])) {
+        if (! isset($this->transactionCallbacks[$connection])) {
             throw new TransactionException('Transaction state not found.');
         }
 
@@ -163,6 +164,7 @@ final class TransactionManager
                 try {
                     $connection = await($getConnection());
                     $result = await($this->runTransaction($connection, $callback, $queryExecutor, $isolationLevel));
+
                     return $result;
                 } catch (Throwable $e) {
                     $lastException = $e;
@@ -249,7 +251,7 @@ final class TransactionManager
                 $levelToSet = $isolationLevel ?? IsolationLevel::REPEATABLE_READ;
                 $this->setIsolationLevel($connection, $levelToSet);
 
-                if (!$connection->begin_transaction()) {
+                if (! $connection->begin_transaction()) {
                     throw new TransactionException(
                         'Failed to begin transaction: ' . $connection->error
                     );
@@ -262,7 +264,7 @@ final class TransactionManager
                     $result = await($result);
                 }
 
-                if (!$connection->commit()) {
+                if (! $connection->commit()) {
                     throw new TransactionException(
                         'Failed to commit transaction: ' . $connection->error
                     );
@@ -316,7 +318,7 @@ final class TransactionManager
      */
     private function executeCallbacks(mysqli $connection, string $type): void
     {
-        if (!isset($this->transactionCallbacks[$connection])) {
+        if (! isset($this->transactionCallbacks[$connection])) {
             return;
         }
 

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Hibla\MySQL\Manager;
 
 use Hibla\MySQL\Exceptions\PoolException;
+use Hibla\MySQL\Utilities\ConfigValidator;
 use Hibla\MySQL\Utilities\ConnectionFactory;
 use Hibla\MySQL\Utilities\ConnectionHealthChecker;
-use Hibla\MySQL\Utilities\ConfigValidator;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use InvalidArgumentException;
@@ -21,7 +21,7 @@ use Throwable;
  * This class manages a pool of MySQLi connections to provide efficient, non-blocking
  * database access in an asynchronous environment. It handles connection limits,
  * waiting queues, and safe connection reuse.
- * 
+ *
  * Note: When using persistent connections (persistent => true), PHP's built-in
  * mysqli persistent connection mechanism is used, which pools connections per PHP
  * process. This pool manager still provides value by managing connection limits
@@ -74,7 +74,7 @@ class PoolManager
      *
      * @param  array<string, mixed>  $dbConfig  Database configuration array.
      *                                          Can include 'persistent' => true to enable persistent connections.
-     *                                          
+     *
      *                                          Note: Persistent connections are pooled by PHP per-process based on
      *                                          host, username, password, socket, port, and database. Each unique
      *                                          combination creates a separate persistent connection pool at the

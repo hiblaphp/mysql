@@ -55,7 +55,7 @@ describe('ConnectionHealthChecker', function () {
             $mysqli->query('INSERT INTO test_reset (id) VALUES (1), (2), (3)');
 
             $mysqli->multi_query('SELECT * FROM test_reset; SELECT * FROM test_reset;');
-            
+
             ConnectionHealthChecker::reset($mysqli);
 
             $result = $mysqli->query('SELECT 1 as test');
@@ -110,7 +110,7 @@ describe('ConnectionHealthChecker', function () {
 
             $result = $mysqli->query('SELECT 1 as test');
             expect($result)->not->toBeFalse();
-            
+
             $testValue = $result->fetch_assoc()['test'];
             expect((int)$testValue)->toBe(1);
 
@@ -122,7 +122,7 @@ describe('ConnectionHealthChecker', function () {
             $mysqli = ConnectionFactory::create($config);
             $mysqli->close();
 
-            expect(fn() => ConnectionHealthChecker::reset($mysqli))->not->toThrow(\Exception::class);
+            expect(fn () => ConnectionHealthChecker::reset($mysqli))->not->toThrow(\Exception::class);
         });
     });
 

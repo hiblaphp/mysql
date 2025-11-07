@@ -39,8 +39,8 @@ describe('ConnectionFactory', function () {
             $mysqli = ConnectionFactory::create($config);
 
             expect($mysqli)->toBeInstanceOf(\mysqli::class);
-            
-            $result = $mysqli->query("SELECT @@character_set_connection");
+
+            $result = $mysqli->query('SELECT @@character_set_connection');
             $row = $result->fetch_row();
             expect($row[0])->toBe('utf8mb4');
 
@@ -67,6 +67,7 @@ describe('ConnectionFactory', function () {
             $config['host'] = 'invalid-host-that-does-not-exist';
 
             $exception = null;
+
             try {
                 ConnectionFactory::create($config);
             } catch (RuntimeException $e) {
@@ -75,7 +76,7 @@ describe('ConnectionFactory', function () {
 
             expect($exception)->toBeInstanceOf(RuntimeException::class);
             expect($exception->getMessage())->toContain('MySQLi Connection failed');
-        })->skip("Skip to avoid warning about invalid host");
+        })->skip('Skip to avoid warning about invalid host');
 
         it('throws exception for invalid credentials', function () {
             $config = TestHelper::getTestConfig();
@@ -83,6 +84,7 @@ describe('ConnectionFactory', function () {
             $config['password'] = 'invalid_password';
 
             $exception = null;
+
             try {
                 ConnectionFactory::create($config);
             } catch (RuntimeException $e) {
@@ -98,6 +100,7 @@ describe('ConnectionFactory', function () {
             $config['database'] = 'non_existent_database_12345';
 
             $exception = null;
+
             try {
                 ConnectionFactory::create($config);
             } catch (RuntimeException $e) {
@@ -113,6 +116,7 @@ describe('ConnectionFactory', function () {
             $config['charset'] = 'invalid_charset';
 
             $exception = null;
+
             try {
                 ConnectionFactory::create($config);
             } catch (RuntimeException $e) {
@@ -136,7 +140,7 @@ describe('ConnectionFactory', function () {
 
         it('creates multiple independent connections', function () {
             $config = TestHelper::getTestConfig();
-            
+
             $mysqli1 = ConnectionFactory::create($config);
             $mysqli2 = ConnectionFactory::create($config);
 

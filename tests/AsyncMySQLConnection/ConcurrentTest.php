@@ -243,7 +243,7 @@ describe('AsyncMySQLConnection Concurrent Operations', function () {
                     $conn,
                     'INSERT INTO logs (message, level) VALUES (?, ?) '
                 );
-                
+
                 $message = "Custom Insert $i";
                 $level = 'debug';
                 mysqli_stmt_bind_param($stmt, 'ss', $message, $level);

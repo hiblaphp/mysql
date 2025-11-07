@@ -6,7 +6,7 @@ namespace Hibla\MySQL\Utilities;
 
 /**
  * Handles parameter type detection and conversion for prepared statements.
- * 
+ *
  * This class provides utilities for automatically detecting MySQL parameter types
  * from PHP values and preprocessing parameters for binding.
  */

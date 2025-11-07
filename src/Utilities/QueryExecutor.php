@@ -4,20 +4,23 @@ declare(strict_types=1);
 
 namespace Hibla\MySQL\Utilities;
 
+use function Hibla\async;
+
 use Hibla\Async\Timer;
+
+use function Hibla\await;
+
 use Hibla\MySQL\Exceptions\QueryException;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use mysqli;
 use mysqli_result;
+
 use mysqli_stmt;
 use Throwable;
 
-use function Hibla\async;
-use function Hibla\await;
-
 /**
  * Handles asynchronous query execution and result processing.
- * 
+ *
  * This class manages the complete lifecycle of MySQL query execution including
  * query preparation, execution, async completion waiting, and result processing.
  */
@@ -228,6 +231,7 @@ final class QueryExecutor
                 if ($result === false) {
                     throw new QueryException('Failed to retrieve async query result');
                 }
+
                 return $result;
             }
 
@@ -253,6 +257,7 @@ final class QueryExecutor
                     if ($result === false) {
                         throw new QueryException('Failed to retrieve async query result');
                     }
+
                     return $result;
                 }
 
@@ -386,10 +391,12 @@ final class QueryExecutor
     {
         if ($stmt !== null) {
             $affectedRows = $stmt->affected_rows;
+
             return $affectedRows < 0 ? 0 : (int)$affectedRows;
         }
         if ($mysqli !== null) {
             $affectedRows = $mysqli->affected_rows;
+
             return $affectedRows < 0 ? 0 : (int)$affectedRows;
         }
 

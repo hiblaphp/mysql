@@ -23,7 +23,7 @@ final class ConnectionHealthChecker
         try {
             // First clear any pending results
             self::clearPendingResults($connection);
-            
+
             return $connection->query('SELECT 1') !== false;
         } catch (Throwable $e) {
             return false;

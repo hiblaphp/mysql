@@ -160,7 +160,7 @@ describe('ParameterTypes', function () {
         });
 
         it('preprocesses object with __toString as string', function () {
-            $obj = new class {
+            $obj = new class () {
                 public function __toString(): string
                 {
                     return 'custom string';

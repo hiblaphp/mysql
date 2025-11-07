@@ -17,7 +17,7 @@ describe('ConfigValidator', function () {
                 'database' => 'test_db',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))->not->toThrow(InvalidArgumentException::class);
+            expect(fn () => ConfigValidator::validate($config))->not->toThrow(InvalidArgumentException::class);
         });
 
         it('accepts configuration with all optional fields', function () {
@@ -34,12 +34,13 @@ describe('ConfigValidator', function () {
                 ],
             ];
 
-            expect(fn() => ConfigValidator::validate($config))->not->toThrow(InvalidArgumentException::class);
+            expect(fn () => ConfigValidator::validate($config))->not->toThrow(InvalidArgumentException::class);
         });
 
         it('throws exception for empty configuration', function () {
-            expect(fn() => ConfigValidator::validate([]))
-                ->toThrow(InvalidArgumentException::class, 'Database configuration cannot be empty');
+            expect(fn () => ConfigValidator::validate([]))
+                ->toThrow(InvalidArgumentException::class, 'Database configuration cannot be empty')
+            ;
         });
 
         it('throws exception for missing host', function () {
@@ -48,8 +49,9 @@ describe('ConfigValidator', function () {
                 'database' => 'test_db',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, "Missing required database configuration field: 'host'");
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, "Missing required database configuration field: 'host'")
+            ;
         });
 
         it('throws exception for missing username', function () {
@@ -58,8 +60,9 @@ describe('ConfigValidator', function () {
                 'database' => 'test_db',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, "Missing required database configuration field: 'username'");
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, "Missing required database configuration field: 'username'")
+            ;
         });
 
         it('throws exception for missing database', function () {
@@ -68,8 +71,9 @@ describe('ConfigValidator', function () {
                 'username' => 'root',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, "Missing required database configuration field: 'database'");
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, "Missing required database configuration field: 'database'")
+            ;
         });
 
         it('throws exception for empty host', function () {
@@ -79,8 +83,9 @@ describe('ConfigValidator', function () {
                 'database' => 'test_db',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, "Database configuration field 'host' cannot be empty");
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, "Database configuration field 'host' cannot be empty")
+            ;
         });
 
         it('throws exception for null host', function () {
@@ -90,8 +95,9 @@ describe('ConfigValidator', function () {
                 'database' => 'test_db',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, "Database configuration field 'host' cannot be empty");
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, "Database configuration field 'host' cannot be empty")
+            ;
         });
 
         it('throws exception for empty database', function () {
@@ -101,8 +107,9 @@ describe('ConfigValidator', function () {
                 'database' => '',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, "Database configuration field 'database' cannot be empty");
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, "Database configuration field 'database' cannot be empty")
+            ;
         });
 
         it('allows empty username', function () {
@@ -112,7 +119,7 @@ describe('ConfigValidator', function () {
                 'database' => 'test_db',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))->not->toThrow(InvalidArgumentException::class);
+            expect(fn () => ConfigValidator::validate($config))->not->toThrow(InvalidArgumentException::class);
         });
 
         it('throws exception for non-string host', function () {
@@ -122,8 +129,9 @@ describe('ConfigValidator', function () {
                 'database' => 'test_db',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, 'Database host must be a string');
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, 'Database host must be a string')
+            ;
         });
 
         it('throws exception for non-string username', function () {
@@ -133,8 +141,9 @@ describe('ConfigValidator', function () {
                 'database' => 'test_db',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, 'Database username must be a string');
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, 'Database username must be a string')
+            ;
         });
 
         it('throws exception for non-string database', function () {
@@ -144,8 +153,9 @@ describe('ConfigValidator', function () {
                 'database' => 123,
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, 'Database database must be a string');
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, 'Database database must be a string')
+            ;
         });
 
         it('throws exception for non-string password', function () {
@@ -156,8 +166,9 @@ describe('ConfigValidator', function () {
                 'password' => 123,
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, 'Database password must be a string');
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, 'Database password must be a string')
+            ;
         });
 
         it('throws exception for non-string charset', function () {
@@ -168,8 +179,9 @@ describe('ConfigValidator', function () {
                 'charset' => 123,
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, 'Database charset must be a string');
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, 'Database charset must be a string')
+            ;
         });
 
         it('throws exception for non-string socket', function () {
@@ -180,8 +192,9 @@ describe('ConfigValidator', function () {
                 'socket' => 123,
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, 'Database socket must be a string');
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, 'Database socket must be a string')
+            ;
         });
 
         it('throws exception for non-integer port', function () {
@@ -192,8 +205,9 @@ describe('ConfigValidator', function () {
                 'port' => '3306',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, 'Database port must be an integer');
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, 'Database port must be an integer')
+            ;
         });
 
         it('throws exception for negative port', function () {
@@ -204,8 +218,9 @@ describe('ConfigValidator', function () {
                 'port' => -1,
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, 'Database port must be a positive integer, got -1');
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, 'Database port must be a positive integer, got -1')
+            ;
         });
 
         it('throws exception for zero port', function () {
@@ -216,8 +231,9 @@ describe('ConfigValidator', function () {
                 'port' => 0,
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, 'Database port must be a positive integer, got 0');
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, 'Database port must be a positive integer, got 0')
+            ;
         });
 
         it('accepts valid positive port', function () {
@@ -228,7 +244,7 @@ describe('ConfigValidator', function () {
                 'port' => 3306,
             ];
 
-            expect(fn() => ConfigValidator::validate($config))->not->toThrow(InvalidArgumentException::class);
+            expect(fn () => ConfigValidator::validate($config))->not->toThrow(InvalidArgumentException::class);
         });
 
         it('throws exception for non-array options', function () {
@@ -239,8 +255,9 @@ describe('ConfigValidator', function () {
                 'options' => 'invalid',
             ];
 
-            expect(fn() => ConfigValidator::validate($config))
-                ->toThrow(InvalidArgumentException::class, 'Database options must be an array');
+            expect(fn () => ConfigValidator::validate($config))
+                ->toThrow(InvalidArgumentException::class, 'Database options must be an array')
+            ;
         });
 
         it('accepts empty options array', function () {
@@ -251,7 +268,7 @@ describe('ConfigValidator', function () {
                 'options' => [],
             ];
 
-            expect(fn() => ConfigValidator::validate($config))->not->toThrow(InvalidArgumentException::class);
+            expect(fn () => ConfigValidator::validate($config))->not->toThrow(InvalidArgumentException::class);
         });
     });
 });

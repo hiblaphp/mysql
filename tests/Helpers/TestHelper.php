@@ -22,7 +22,7 @@ class TestHelper
             'charset' => 'utf8mb4',
             'options' => [
                 MYSQLI_OPT_INT_AND_FLOAT_NATIVE => true,
-            ]           
+            ],
         ];
     }
 }

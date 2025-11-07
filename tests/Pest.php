@@ -12,7 +12,6 @@ expect()->extend('toBeConnectionId', function () {
     return $this->toBeInt()->toBeGreaterThan(0);
 });
 
-
 function createPersistentConnection(int $poolSize = 10): AsyncMySQLConnection
 {
     $isCI = (bool) getenv('CI');

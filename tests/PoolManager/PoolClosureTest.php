@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Hibla\MySQL\Manager\PoolManager;
 use Hibla\MySQL\Exceptions\PoolException;
+use Hibla\MySQL\Manager\PoolManager;
 use Tests\Helpers\TestHelper;
 
 describe('PoolManager Closure', function () {

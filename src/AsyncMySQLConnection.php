@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Hibla\MySQL;
 
+use function Hibla\async;
+use function Hibla\await;
+
+use Hibla\MySQL\Enums\IsolationLevel;
 use Hibla\MySQL\Exceptions\ConfigurationException;
 use Hibla\MySQL\Exceptions\NotInitializedException;
 use Hibla\MySQL\Exceptions\NotInTransactionException;
@@ -13,13 +17,10 @@ use Hibla\MySQL\Exceptions\TransactionFailedException;
 use Hibla\MySQL\Manager\PoolManager;
 use Hibla\MySQL\Manager\TransactionManager;
 use Hibla\MySQL\Utilities\QueryExecutor;
-use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\MySQL\Utilities\Transaction;
-use Hibla\MySQL\Enums\IsolationLevel;
-use mysqli;
 
-use function Hibla\async;
-use function Hibla\await;
+use Hibla\Promise\Interfaces\PromiseInterface;
+use mysqli;
 
 /**
  * Instance-based Asynchronous MySQL API for independent database connections.
@@ -150,6 +151,7 @@ final class AsyncMySQLConnection
     {
         return async(function () use ($callback): mixed {
             $mysqli = null;
+
             try {
                 $mysqli = await($this->getPool()->get());
 
@@ -165,7 +167,7 @@ final class AsyncMySQLConnection
     /**
      * Executes a SELECT query and returns all matching rows.
      *
-     * The query is executed asynchronously using MySQL's non-blocking API.
+     * The query is executed asynchronously using MySQLi's non-blocking API if there are no parameters.
      * Parameters are safely bound using prepared statements to prevent SQL injection.
      *
      * @param  string  $sql  SQL query with optional parameter placeholders (?)
@@ -185,7 +187,7 @@ final class AsyncMySQLConnection
     /**
      * Executes a SELECT query and returns the first matching row.
      *
-     * The query is executed asynchronously using MySQL's non-blocking API.
+     * The query is executed asynchronously using MySQLi's non-blocking API if there are no parameters.
      * Returns null if no rows match the query.
      *
      * @param  string  $sql  SQL query with optional parameter placeholders (?)
@@ -205,7 +207,7 @@ final class AsyncMySQLConnection
     /**
      * Executes an INSERT, UPDATE, or DELETE statement and returns affected row count.
      *
-     * The statement is executed asynchronously using MySQL's non-blocking API.
+     * The statement is executed asynchronously using MySQLi's non-blocking API if there are no parameters.
      * Returns the number of rows affected by the operation.
      *
      * @param  string  $sql  SQL statement with optional parameter placeholders (?)
@@ -268,8 +270,8 @@ final class AsyncMySQLConnection
         ?IsolationLevel $isolationLevel = null
     ): PromiseInterface {
         return $this->getTransactionManager()->executeTransaction(
-            fn() => $this->getPool()->get(),
-            fn($connection) => $this->getPool()->release($connection),
+            fn () => $this->getPool()->get(),
+            fn ($connection) => $this->getPool()->release($connection),
             $callback,
             $this->getQueryExecutor(),
             $attempts,
@@ -354,7 +356,7 @@ final class AsyncMySQLConnection
      */
     private function getPool(): PoolManager
     {
-        if (!$this->isInitialized || $this->pool === null) {
+        if (! $this->isInitialized || $this->pool === null) {
             throw new NotInitializedException(
                 'MySQLConnection instance has not been initialized or has been reset.'
             );

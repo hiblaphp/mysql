@@ -1,47 +1,49 @@
 <?php
 
-use Hibla\Promise\Promise;
+declare(strict_types=1);
 
-use function Hibla\await;
+use Hibla\Promise\Promise;
 
 describe('Connection ID Persistence', function () {
     it('reuses connection IDs within the same persistent client instance', function () {
         $client = createPersistentConnection();
-        
+
         $connectionIds = [];
         for ($i = 0; $i < 5; $i++) {
-            $id = $client->fetchValue("SELECT CONNECTION_ID()")->await();
+            $id = $client->fetchValue('SELECT CONNECTION_ID()')->await();
             $connectionIds[] = $id;
         }
-        
+
         $uniqueIds = array_unique($connectionIds);
         expect($uniqueIds)->toHaveCount(1)
-            ->and((int) $connectionIds[0])->toBeInt()->toBeGreaterThan(0);
+            ->and((int) $connectionIds[0])->toBeInt()->toBeGreaterThan(0)
+        ;
     });
-    
+
     it('reuses connection IDs within the same regular client instance', function () {
         $client = createRegularConnection();
-        
+
         $connectionIds = [];
         for ($i = 0; $i < 5; $i++) {
-            $id = $client->fetchValue("SELECT CONNECTION_ID()")->await();
+            $id = $client->fetchValue('SELECT CONNECTION_ID()')->await();
             $connectionIds[] = $id;
         }
-        
+
         $uniqueIds = array_unique($connectionIds);
         expect($uniqueIds)->toHaveCount(1)
-            ->and((int) $connectionIds[0])->toBeInt()->toBeGreaterThan(0);
+            ->and((int) $connectionIds[0])->toBeInt()->toBeGreaterThan(0)
+        ;
     });
 });
 
 describe('Pool Statistics', function () {
     it('shows correct statistics for persistent connection pool', function () {
         $client = createPersistentConnection(10);
-        
-        $client->fetchValue("SELECT 1")->await();
-        
+
+        $client->fetchValue('SELECT 1')->await();
+
         $stats = $client->getStats();
-        
+
         expect($stats)
             ->toHaveKey('active_connections')
             ->toHaveKey('pooled_connections')
@@ -51,41 +53,43 @@ describe('Pool Statistics', function () {
             ->toHaveKey('persistent')
             ->and($stats['persistent'])->toBeTrue()
             ->and($stats['max_size'])->toBe(10)
-            ->and($stats['config_validated'])->toBeTrue();
+            ->and($stats['config_validated'])->toBeTrue()
+        ;
     });
-    
+
     it('shows correct statistics for regular connection pool', function () {
         $client = createRegularConnection(10);
-        
-        $client->fetchValue("SELECT 1")->await();
-        
+
+        $client->fetchValue('SELECT 1')->await();
+
         $stats = $client->getStats();
-        
+
         expect($stats)
             ->toHaveKey('persistent')
             ->and($stats['persistent'])->toBeFalse()
-            ->and($stats['max_size'])->toBe(10);
+            ->and($stats['max_size'])->toBe(10)
+        ;
     });
 });
 
 describe('Thread ID Analysis', function () {
     it('returns valid thread IDs for persistent connections', function () {
         $client = createPersistentConnection();
-        
+
         $threadId = $client->run(function ($mysqli) {
             return $mysqli->thread_id;
         })->await();
-        
+
         expect($threadId)->toBeInt()->toBeGreaterThan(0);
     });
-    
+
     it('returns valid thread IDs for regular connections', function () {
         $client = createRegularConnection();
-        
+
         $threadId = $client->run(function ($mysqli) {
             return $mysqli->thread_id;
         })->await();
-        
+
         expect($threadId)->toBeInt()->toBeGreaterThan(0);
     });
 });
@@ -93,103 +97,106 @@ describe('Thread ID Analysis', function () {
 describe('Session Variable Persistence', function () {
     it('persists session variables within persistent client instance', function () {
         $client = createPersistentConnection();
-        
+
         $client->execute("SET @test_var = 'persistent_value'")->await();
-        $value1 = $client->fetchValue("SELECT @test_var")->await();
-        $value2 = $client->fetchValue("SELECT @test_var")->await();
-        
+        $value1 = $client->fetchValue('SELECT @test_var')->await();
+        $value2 = $client->fetchValue('SELECT @test_var')->await();
+
         expect($value1)->toBe('persistent_value')
-            ->and($value2)->toBe('persistent_value');
+            ->and($value2)->toBe('persistent_value')
+        ;
     });
-    
+
     it('persists session variables within regular client instance', function () {
         $client = createRegularConnection();
-        
+
         $client->execute("SET @test_var = 'regular_value'")->await();
-        $value1 = $client->fetchValue("SELECT @test_var")->await();
-        $value2 = $client->fetchValue("SELECT @test_var")->await();
-        
+        $value1 = $client->fetchValue('SELECT @test_var')->await();
+        $value2 = $client->fetchValue('SELECT @test_var')->await();
+
         expect($value1)->toBe('regular_value')
-            ->and($value2)->toBe('regular_value');
+            ->and($value2)->toBe('regular_value')
+        ;
     });
 });
 
 describe('Transaction Handling', function () {
     it('can start and rollback transactions on persistent connections', function () {
         $client = createPersistentConnection();
-        
+
         $result = $client->transaction(function ($trx) {
-            $result = await ($trx->fetchValue("SELECT 1 as test"));
+            $result = $trx->fetchValue('SELECT 1 as test');
+
             return $result;
         })->await();
-        
+
         expect($result)->toBe('1');
     });
-    
+
     it('rolls back on exceptions', function () {
         $client = createPersistentConnection();
-        
+
         try {
             $client->transaction(function ($trx) {
-                await ($trx->execute("CREATE TEMPORARY TABLE IF NOT EXISTS test_rollback (id INT)"));
-                await ($trx->execute("INSERT INTO test_rollback VALUES (1)"));
-                
-                throw new Exception("Intentional error");
+                $trx->execute('CREATE TEMPORARY TABLE IF NOT EXISTS test_rollback (id INT)');
+                $trx->execute('INSERT INTO test_rollback VALUES (1)');
+
+                throw new Exception('Intentional error');
             })->await();
         } catch (Exception $e) {
             expect($e->getMessage())->toContain('Intentional error');
         }
     });
-    
+
     it('executes queries within transaction context', function () {
         $client = createPersistentConnection();
-        
+
         $result = $client->transaction(function ($trx) {
-            await ($trx->execute("CREATE TEMPORARY TABLE IF NOT EXISTS test_trx (id INT, value VARCHAR(50))"));
-            await ($trx->execute("INSERT INTO test_trx VALUES (?, ?)", [1, 'test'], 'is'));
-            $row = await ($trx->fetchOne("SELECT * FROM test_trx WHERE id = ?", [1], 'i'));
-            
+            $trx->execute('CREATE TEMPORARY TABLE IF NOT EXISTS test_trx (id INT, value VARCHAR(50))');
+            $trx->execute('INSERT INTO test_trx VALUES (?, ?)', [1, 'test'], 'is');
+            $row = $trx->fetchOne('SELECT * FROM test_trx WHERE id = ?', [1], 'i');
+
             return $row['value'];
         })->await();
-        
+
         expect($result)->toBe('test');
     });
-    
+
     it('can use onCommit callback', function () {
         $client = createPersistentConnection();
-        
+
         $commitCalled = false;
-        
+
         $client->transaction(function ($trx) use (&$commitCalled) {
-            await ($trx->execute("SELECT 1"));
-            
+            $trx->execute('SELECT 1');
+
             $trx->onCommit(function () use (&$commitCalled) {
                 $commitCalled = true;
             });
         })->await();
-        
+
         expect($commitCalled)->toBeTrue();
     });
-    
+
     it('can use onRollback callback', function () {
         $client = createPersistentConnection();
-        
+
         $rollbackCalled = false;
-        
+
         try {
             $client->transaction(function ($trx) use (&$rollbackCalled) {
-                await ($trx->execute("SELECT 1"));
-                
+                $trx->execute('SELECT 1');
+
                 $trx->onRollback(function () use (&$rollbackCalled) {
                     $rollbackCalled = true;
                 });
-                
-                throw new Exception("Force rollback");
+
+                throw new Exception('Force rollback');
             })->await();
         } catch (Exception $e) {
             // Expected
         }
-        
+
         expect($rollbackCalled)->toBeTrue();
     });
 });
@@ -197,37 +204,39 @@ describe('Transaction Handling', function () {
 describe('Parallel Execution Performance', function () {
     it('executes queries in parallel for persistent connections', function () {
         $client = createPersistentConnection();
-        
+
         $startTime = microtime(true);
         Promise::all([
-            $client->query("SELECT SLEEP(1)"),
-            $client->query("SELECT SLEEP(1)"),
+            $client->query('SELECT SLEEP(1)'),
+            $client->query('SELECT SLEEP(1)'),
         ])->await();
         $executionTime = microtime(true) - $startTime;
-        
+
         expect($executionTime)->toBeLessThan(1.5)
-            ->toBeGreaterThan(0.9);
+            ->toBeGreaterThan(0.9)
+        ;
     });
-    
+
     it('executes queries in parallel for regular connections', function () {
         $client = createRegularConnection();
-        
+
         $startTime = microtime(true);
         Promise::all([
-            $client->query("SELECT SLEEP(1)"),
-            $client->query("SELECT SLEEP(1)"),
+            $client->query('SELECT SLEEP(1)'),
+            $client->query('SELECT SLEEP(1)'),
         ])->await();
         $executionTime = microtime(true) - $startTime;
-        
+
         expect($executionTime)->toBeLessThan(1.5)
-            ->toBeGreaterThan(0.9);
+            ->toBeGreaterThan(0.9)
+        ;
     });
 });
 
 describe('Connection Reuse with Small Pool', function () {
     it('reuses the same connection with pool size of 1', function () {
         $client = createPersistentConnection(1);
-        
+
         $threadIds = [];
         for ($i = 0; $i < 5; $i++) {
             $threadId = $client->run(function ($mysqli) {
@@ -235,82 +244,87 @@ describe('Connection Reuse with Small Pool', function () {
             })->await();
             $threadIds[] = $threadId;
         }
-        
+
         $uniqueThreadIds = array_unique($threadIds);
-        
+
         expect($uniqueThreadIds)->toHaveCount(1)
-            ->and($threadIds)->toHaveCount(5);
+            ->and($threadIds)->toHaveCount(5)
+        ;
     });
 });
 
 describe('TRUE Persistent Connection Test', function () {
     it('reuses connections across client instance recreation for persistent connections', function () {
         $client1 = createPersistentConnection(1);
-        
+
         $threadId1 = $client1->run(function ($mysqli) {
             return $mysqli->thread_id;
         })->await();
-        
+
         $client1->execute("SET @persistent_test = 'client1'")->await();
-        $testVar1 = $client1->fetchValue("SELECT @persistent_test")->await();
-        
+        $testVar1 = $client1->fetchValue('SELECT @persistent_test')->await();
+
         expect($testVar1)->toBe('client1')
-            ->and($threadId1)->toBeInt()->toBeGreaterThan(0);
-        
+            ->and($threadId1)->toBeInt()->toBeGreaterThan(0)
+        ;
+
         $client1->reset();
         unset($client1);
-        
+
         $client2 = createPersistentConnection(1);
-        
+
         $threadId2 = $client2->run(function ($mysqli) {
             return $mysqli->thread_id;
         })->await();
-        
-        $testVar2 = $client2->fetchValue("SELECT @persistent_test")->await();
-        
+
+        $testVar2 = $client2->fetchValue('SELECT @persistent_test')->await();
+
         expect($threadId2)->toBe($threadId1)
-            ->and($testVar2)->toBeNull();
+            ->and($testVar2)->toBeNull()
+        ;
     });
-    
+
     it('does NOT reuse connections across client instance recreation for regular connections', function () {
         $client1 = createRegularConnection(1);
-        
+
         $threadId1 = $client1->run(function ($mysqli) {
             return $mysqli->thread_id;
         })->await();
-        
+
         expect($threadId1)->toBeInt()->toBeGreaterThan(0);
-        
+
         $client1->reset();
         unset($client1);
-        
+
         $client2 = createRegularConnection(1);
-        
+
         $threadId2 = $client2->run(function ($mysqli) {
             return $mysqli->thread_id;
         })->await();
-        
+
         expect($threadId2)->toBeInt()->toBeGreaterThan(0)
-            ->not->toBe($threadId1);
+            ->not->toBe($threadId1)
+        ;
     });
 });
 
 describe('Server-Side Connection Analysis', function () {
     it('can query the MySQL process list', function () {
         $client = createPersistentConnection();
-        
-        $result = $client->query("SHOW PROCESSLIST")->await();
-        
+
+        $result = $client->query('SHOW PROCESSLIST')->await();
+
         expect($result)->toBeArray()
             ->not->toBeEmpty()
-            ->and($result[0])->toHaveKeys(['Id', 'User', 'db', 'Command']);
+            ->and($result[0])->toHaveKeys(['Id', 'User', 'db', 'Command'])
+        ;
     });
 });
 
 describe('Connection Properties', function () {
     it('provides connection metadata for persistent connections', function () {
         $client = createPersistentConnection();
-        
+
         $metadata = $client->run(function ($mysqli) {
             return [
                 'thread_id' => $mysqli->thread_id,
@@ -319,45 +333,47 @@ describe('Connection Properties', function () {
                 'server_info' => $mysqli->server_info,
             ];
         })->await();
-        
+
         expect($metadata['thread_id'])->toBeInt()->toBeGreaterThan(0)
             ->and($metadata['host_info'])->toBeString()
             ->and($metadata['protocol_version'])->toBeInt()
-            ->and($metadata['server_info'])->toBeString();
+            ->and($metadata['server_info'])->toBeString()
+        ;
     });
 });
 
 describe('Edge Cases', function () {
     it('handles multiple parallel operations correctly', function () {
         $client = createPersistentConnection(5);
-        
+
         $promises = [];
         for ($i = 0; $i < 10; $i++) {
             $promises[] = $client->fetchValue("SELECT {$i}");
         }
-        
+
         $results = Promise::all($promises)->await();
-        
+
         expect($results)->toHaveCount(10);
-        
+
         $intResults = array_map('intval', $results);
-        
+
         expect($intResults[0])->toBe(0)
-            ->and($intResults[9])->toBe(9);
+            ->and($intResults[9])->toBe(9)
+        ;
     });
-    
+
     it('handles connection pool exhaustion gracefully', function () {
         $client = createPersistentConnection(2);
-        
+
         $promises = [];
         for ($i = 0; $i < 5; $i++) {
-            $promises[] = $client->query("SELECT SLEEP(0.1)");
+            $promises[] = $client->query('SELECT SLEEP(0.1)');
         }
-        
+
         $startTime = microtime(true);
         Promise::all($promises)->await();
         $duration = microtime(true) - $startTime;
-        
+
         expect($duration)->toBeGreaterThan(0.2);
     });
 });

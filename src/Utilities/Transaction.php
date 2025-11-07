@@ -12,7 +12,7 @@ use mysqli_stmt;
 
 /**
  * Represents an active database transaction with scoped query methods.
- * 
+ *
  * This class provides a clean API for executing queries within a transaction context.
  * All queries executed through this object are automatically part of the transaction.
  */
@@ -30,7 +30,8 @@ final class Transaction
         //@phpstan-ignore-next-line
         private readonly QueryExecutor $queryExecutor,
         private readonly TransactionManager $transactionManager
-    ) {}
+    ) {
+    }
 
     /**
      * Executes a SELECT query and returns all matching rows.
@@ -39,7 +40,7 @@ final class Transaction
      * @param  array<int, mixed>  $params  Parameter values for prepared statement
      * @param  string|null  $types  Parameter type string (i=integer, d=double, s=string, b=blob). Auto-detected if null.
      * @return array<int, array<string, mixed>> Array of associative arrays
-     * 
+     *
      * @throws QueryException If query execution fails
      */
     public function query(string $sql, array $params = [], ?string $types = null): array
@@ -61,7 +62,7 @@ final class Transaction
      * @param  array<int, mixed>  $params  Parameter values for prepared statement
      * @param  string|null  $types  Parameter type string (i=integer, d=double, s=string, b=blob). Auto-detected if null.
      * @return array<string, mixed>|null Associative array or null if no rows
-     * 
+     *
      * @throws QueryException If query execution fails
      */
     public function fetchOne(string $sql, array $params = [], ?string $types = null): ?array
@@ -87,7 +88,7 @@ final class Transaction
      * @param  array<int, mixed>  $params  Parameter values for prepared statement
      * @param  string|null  $types  Parameter type string (i=integer, d=double, s=string, b=blob). Auto-detected if null.
      * @return int Number of affected rows
-     * 
+     *
      * @throws QueryException If query execution fails
      */
     public function execute(string $sql, array $params = [], ?string $types = null): int
@@ -96,11 +97,13 @@ final class Transaction
 
         if ($result instanceof mysqli_stmt) {
             $affectedRows = $result->affected_rows;
+
             return $affectedRows < 0 ? 0 : (int)$affectedRows;
         }
 
         $mysqli = $this->getConnection();
         $affectedRows = $mysqli->affected_rows;
+
         return $affectedRows < 0 ? 0 : (int)$affectedRows;
     }
 
@@ -111,7 +114,7 @@ final class Transaction
      * @param  array<int, mixed>  $params  Parameter values for prepared statement
      * @param  string|null  $types  Parameter type string (i=integer, d=double, s=string, b=blob). Auto-detected if null.
      * @return mixed Scalar value or null if no rows
-     * 
+     *
      * @throws QueryException If query execution fails
      */
     public function fetchValue(string $sql, array $params = [], ?string $types = null): mixed
@@ -120,6 +123,7 @@ final class Transaction
 
         if ($result instanceof mysqli_result) {
             $row = $result->fetch_row();
+
             return $row !== null ? $row[0] : null;
         }
 
@@ -133,7 +137,7 @@ final class Transaction
      * @param  array<int, mixed>  $params  Parameter values for prepared statement
      * @param  string|null  $types  Parameter type string (i=integer, d=double, s=string, b=blob). Auto-detected if null.
      * @return mysqli_result|mysqli_stmt|bool Query result, statement, or boolean for non-SELECT queries
-     * 
+     *
      * @throws QueryException If query execution fails
      */
     private function prepareAndExecute(string $sql, array $params = [], ?string $types = null): mysqli_result|mysqli_stmt|bool
@@ -159,7 +163,7 @@ final class Transaction
      * @param  string  $sql  SQL query
      * @param  array<int, mixed>  $params  Parameters (for error context)
      * @return mysqli_result|bool Query result
-     * 
+     *
      * @throws QueryException If query execution fails
      */
     private function executeSimpleQuery(mysqli $mysqli, string $sql, array $params): mysqli_result|bool
@@ -180,7 +184,7 @@ final class Transaction
      * @param  string  $sql  SQL query
      * @param  array<int, mixed>  $params  Parameters (for error context)
      * @return mysqli_stmt Prepared statement
-     * 
+     *
      * @throws QueryException If preparation fails
      */
     private function prepareStatement(mysqli $mysqli, string $sql, array $params): mysqli_stmt
@@ -202,7 +206,7 @@ final class Transaction
      * @param  array<int, mixed>  $params  Parameter values
      * @param  string|null  $types  Parameter type string
      * @return void
-     * 
+     *
      * @throws QueryException If binding or execution fails
      */
     private function bindAndExecuteStatement(mysqli_stmt $stmt, string $sql, array $params, ?string $types): void
@@ -233,6 +237,7 @@ final class Transaction
     private function isSelectQuery(string $sql): bool
     {
         $trimmedSql = ltrim($sql);
+
         return stripos($trimmedSql, 'SELECT') === 0
             || stripos($trimmedSql, 'SHOW') === 0
             || stripos($trimmedSql, 'DESCRIBE') === 0;
@@ -245,7 +250,7 @@ final class Transaction
      * @param  string  $sql  SQL query (for error context)
      * @param  array<int, mixed>  $params  Parameters (for error context)
      * @return mysqli_result The query result
-     * 
+     *
      * @throws QueryException If getting result fails
      */
     private function getStatementResult(mysqli_stmt $stmt, string $sql, array $params): mysqli_result
@@ -289,7 +294,7 @@ final class Transaction
 
     /**
      * Gets the underlying mysqli connection.
-     * 
+     *
      * Useful for advanced operations or raw mysqli access within the transaction.
      *
      * @return mysqli The mysqli connection

@@ -24,7 +24,7 @@ describe('AsyncMySQLConnection Connection Pool', function () {
             ->and($stats['pooled_connections'])->toBeInt()
             ->and($stats['waiting_requests'])->toBeInt()
             ->and($stats['max_size'])->toBeInt()
-            ->and($stats['max_size'])->toBe(5) 
+            ->and($stats['max_size'])->toBe(5)
         ;
     });
 
@@ -81,7 +81,7 @@ describe('AsyncMySQLConnection Connection Pool', function () {
         expect($results)->toHaveCount(5);
 
         $count = $db->fetchValue('SELECT COUNT(*) FROM test_exhaustion')->await();
-        expect((int)$count)->toBe(5); 
+        expect((int)$count)->toBe(5);
 
         $db->execute('DROP TABLE IF EXISTS test_exhaustion')->await();
     });

@@ -59,7 +59,7 @@ final class ConnectionFactory
         $port = self::getIntOrNull($config, 'port');
         $socket = self::getStringOrNull($config, 'socket');
 
-        if ($persistent && $host !== null && !str_starts_with($host, 'p:')) {
+        if ($persistent && $host !== null && ! str_starts_with($host, 'p:')) {
             $host = 'p:' . $host;
         }
 
@@ -68,7 +68,7 @@ final class ConnectionFactory
             $mysqli = new mysqli($host, $username, $password, $database, $port, $socket);
         } catch (mysqli_sql_exception $e) {
             throw new PoolException(
-                "MySQLi Connection failed: " . $e->getMessage(),
+                'MySQLi Connection failed: ' . $e->getMessage(),
                 0,
                 $e
             );
@@ -76,7 +76,7 @@ final class ConnectionFactory
 
         if ($mysqli->connect_error !== null) {
             throw new PoolException(
-                "MySQLi Connection failed: " . $mysqli->connect_error
+                'MySQLi Connection failed: ' . $mysqli->connect_error
             );
         }
 
@@ -103,7 +103,7 @@ final class ConnectionFactory
                 $value = (int) $value;
             }
 
-            if (!is_int($value) && !is_string($value)) {
+            if (! is_int($value) && ! is_string($value)) {
                 throw new PoolException(
                     sprintf(
                         'Invalid option value type for %s: expected int or string, got %s',

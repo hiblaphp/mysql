@@ -9,7 +9,9 @@ describe('AsyncMySQLConnection Execute', function () {
     it('executes INSERT and returns affected rows', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
         $db->execute('
             CREATE TABLE orders (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -25,13 +27,17 @@ describe('AsyncMySQLConnection Execute', function () {
 
         expect($affected)->toBe(1);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
     });
 
     it('executes INSERT with parameters', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
         $db->execute('
             CREATE TABLE orders (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -53,13 +59,17 @@ describe('AsyncMySQLConnection Execute', function () {
             ->and($result['status'])->toBe('completed')
         ;
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
     });
 
     it('executes multiple INSERTs', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
         $db->execute('
             CREATE TABLE orders (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -83,13 +93,17 @@ describe('AsyncMySQLConnection Execute', function () {
         $count = $db->fetchValue('SELECT COUNT(*) FROM orders')->await();
         expect($count)->toBe(2);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
     });
 
     it('executes UPDATE and returns affected rows', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
         $db->execute('
             CREATE TABLE orders (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -109,13 +123,17 @@ describe('AsyncMySQLConnection Execute', function () {
 
         expect($affected)->toBe(1);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
     });
 
     it('executes DELETE and returns affected rows', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
         $db->execute('
             CREATE TABLE orders (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -136,13 +154,17 @@ describe('AsyncMySQLConnection Execute', function () {
         $remaining = $db->fetchValue('SELECT COUNT(*) FROM orders')->await();
         expect($remaining)->toBe(2);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
     });
 
     it('returns 0 for statements affecting no rows', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
         $db->execute('
             CREATE TABLE orders (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -156,13 +178,17 @@ describe('AsyncMySQLConnection Execute', function () {
 
         expect($affected)->toBe(0);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
     });
 
     it('handles batch inserts', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
         $db->execute('
             CREATE TABLE orders (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -184,6 +210,8 @@ describe('AsyncMySQLConnection Execute', function () {
         $count = $db->fetchValue('SELECT COUNT(*) FROM orders')->await();
         expect($count)->toBe(5);
 
+        $db->execute('SET FOREIGN_KEY_CHECKS = 0')->await();
         $db->execute('DROP TABLE IF EXISTS orders')->await();
+        $db->execute('SET FOREIGN_KEY_CHECKS = 1')->await();
     });
 });

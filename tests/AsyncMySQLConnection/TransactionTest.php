@@ -6,9 +6,10 @@ use Hibla\MySQL\AsyncMySQLConnection;
 use Hibla\MySQL\Enums\IsolationLevel;
 use Hibla\MySQL\Exceptions\TransactionFailedException;
 use Hibla\Promise\Promise;
-use Tests\Helpers\TestHelper;
 
 use function Hibla\sleep;
+
+use Tests\Helpers\TestHelper;
 
 describe('AsyncMySQLConnection Transactions', function () {
     it('commits successful transaction', function () {
@@ -24,8 +25,8 @@ describe('AsyncMySQLConnection Transactions', function () {
         ')->await();
 
         $result = $db->transaction(function ($trx) {
-            await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Alice', 1000.00], 'sd'));
-            await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Bob', 2000.00], 'sd'));
+            $trx->execute('INSERT INTO accounts (name, balance) VALUES (?, ?)', ['Alice', 1000.00], 'sd');
+            $trx->execute('INSERT INTO accounts (name, balance) VALUES (?, ?)', ['Bob', 2000.00], 'sd');
 
             return 'success';
         })->await();
@@ -52,7 +53,7 @@ describe('AsyncMySQLConnection Transactions', function () {
 
         try {
             $db->transaction(function ($trx) {
-                await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Charlie', 500.00], 'sd'));
+                $trx->execute('INSERT INTO accounts (name, balance) VALUES (?, ?)', ['Charlie', 500.00], 'sd');
 
                 throw new Exception('Simulated error');
             })->await();
@@ -84,8 +85,8 @@ describe('AsyncMySQLConnection Transactions', function () {
         $db->transaction(function ($trx) {
             $transferAmount = 300.00;
 
-            await($trx->execute('UPDATE accounts SET balance = balance - ? WHERE name = ?', [$transferAmount, 'Alice'], 'ds'));
-            await($trx->execute('UPDATE accounts SET balance = balance + ? WHERE name = ?', [$transferAmount, 'Bob'], 'ds'));
+            $trx->execute('UPDATE accounts SET balance = balance - ? WHERE name = ?', [$transferAmount, 'Alice'], 'ds');
+            $trx->execute('UPDATE accounts SET balance = balance + ? WHERE name = ?', [$transferAmount, 'Bob'], 'ds');
         })->await();
 
         $aliceBalance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Alice'")->await();
@@ -116,7 +117,7 @@ describe('AsyncMySQLConnection Transactions', function () {
             $db->transaction(function ($trx) use (&$attempts) {
                 $attempts++;
 
-                await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['David', 100.00], 'sd'));
+                $trx->execute('INSERT INTO accounts (name, balance) VALUES (?, ?)', ['David', 100.00], 'sd');
 
                 if ($attempts < 3) {
                     throw new Exception('Retry me');
@@ -176,8 +177,8 @@ describe('AsyncMySQLConnection Transactions', function () {
         ')->await();
 
         $insertedId = $db->transaction(function ($trx) {
-            await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Eve', 750.00], 'sd'));
-            $insertedId = await($trx->fetchValue("SELECT LAST_INSERT_ID()"));
+            $trx->execute('INSERT INTO accounts (name, balance) VALUES (?, ?)', ['Eve', 750.00], 'sd');
+            $insertedId = $trx->fetchValue('SELECT LAST_INSERT_ID()');
 
             return $insertedId;
         })->await();
@@ -203,13 +204,13 @@ describe('AsyncMySQLConnection Transactions', function () {
         ')->await();
 
         $db->transaction(function ($trx) {
-            await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Frank', 1500.00], 'sd'));
+            $trx->execute('INSERT INTO accounts (name, balance) VALUES (?, ?)', ['Frank', 1500.00], 'sd');
 
-            $account = await($trx->fetchOne("SELECT * FROM accounts WHERE name = ?", ['Frank'], 's'));
+            $account = $trx->fetchOne('SELECT * FROM accounts WHERE name = ?', ['Frank'], 's');
 
             expect($account['balance'])->toBe('1500.00');
 
-            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [2000.00, 'Frank'], 'ds'));
+            $trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [2000.00, 'Frank'], 'ds');
         })->await();
 
         $balance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Frank'")->await();
@@ -232,45 +233,47 @@ describe('AsyncMySQLConnection Transactions', function () {
 
         $db->execute("INSERT INTO accounts (name, balance) VALUES ('Grace', 1000.00)")->await();
 
-        $db->execute("SET SESSION innodb_lock_wait_timeout = 2")->await();
+        $db->execute('SET SESSION innodb_lock_wait_timeout = 2')->await();
 
         $executionLog = [];
 
         $promise1 = $db->transaction(function ($trx) use (&$executionLog) {
-            await($trx->execute("SET SESSION innodb_lock_wait_timeout = 2"));
+            $trx->execute('SET SESSION innodb_lock_wait_timeout = 2');
 
-            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Grace'], 's'));
+            $row = $trx->fetchOne('SELECT balance FROM accounts WHERE name = ? FOR UPDATE', ['Grace'], 's');
             $executionLog[] = 'T1-locked';
             $currentBalance = (float)$row['balance'];
             Hibla\sleep(3);
 
             $newBalance = $currentBalance + 100;
-            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds'));
+            $trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds');
             $executionLog[] = 'T1-complete';
 
             return $currentBalance + 100;
         });
 
         $promise2 = $db->transaction(function ($trx) use (&$executionLog) {
-            await($trx->execute("SET SESSION innodb_lock_wait_timeout = 2"));
+            $trx->execute('SET SESSION innodb_lock_wait_timeout = 2');
 
             $executionLog[] = 'T2-attempting';
-            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Grace'], 's'));
+            $row = $trx->fetchOne('SELECT balance FROM accounts WHERE name = ? FOR UPDATE', ['Grace'], 's');
             $executionLog[] = 'T2-locked';
             $currentBalance = (float)$row['balance'];
 
             $newBalance = $currentBalance + 200;
-            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds'));
+            $trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds');
 
             return $currentBalance + 200;
         });
 
-        expect(fn() => Promise::all([$promise1, $promise2])->await())
-            ->toThrow(TransactionFailedException::class);
+        expect(fn () => Promise::all([$promise1, $promise2])->await())
+            ->toThrow(TransactionFailedException::class)
+        ;
 
         expect($executionLog)->toContain('T1-locked')
             ->and($executionLog)->toContain('T2-attempting')
-            ->and($executionLog)->not->toContain('T2-locked');
+            ->and($executionLog)->not->toContain('T2-locked')
+        ;
 
         $db->execute('DROP TABLE IF EXISTS accounts')->await();
     });
@@ -295,24 +298,24 @@ describe('AsyncMySQLConnection Transactions', function () {
         $startTime = microtime(true);
 
         $promise1 = $db->transaction(function ($trx) use (&$executionLog) {
-            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Grace'], 's'));
+            $row = $trx->fetchOne('SELECT balance FROM accounts WHERE name = ? FOR UPDATE', ['Grace'], 's');
             $executionLog[] = 'T1-start';
 
             Hibla\sleep(0.1);
 
             $newBalance = (float)$row['balance'] + 100;
-            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds'));
+            $trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds');
             $executionLog[] = 'T1-end';
         });
 
         $promise2 = $db->transaction(function ($trx) use (&$executionLog) {
-            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Henry'], 's'));
+            $row = $trx->fetchOne('SELECT balance FROM accounts WHERE name = ? FOR UPDATE', ['Henry'], 's');
             $executionLog[] = 'T2-start';
 
             Hibla\sleep(0.1);
 
             $newBalance = (float)$row['balance'] + 200;
-            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Henry'], 'ds'));
+            $trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Henry'], 'ds');
             $executionLog[] = 'T2-end';
         });
 
@@ -328,7 +331,8 @@ describe('AsyncMySQLConnection Transactions', function () {
         $henryBalance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Henry'")->await();
 
         expect((float)$graceBalance)->toBe(1100.00)
-            ->and((float)$henryBalance)->toBe(2200.00);
+            ->and((float)$henryBalance)->toBe(2200.00)
+        ;
 
         $db->execute('DROP TABLE IF EXISTS accounts')->await();
     });
@@ -352,20 +356,20 @@ describe('AsyncMySQLConnection Transactions', function () {
         $startTime = microtime(true);
 
         $promise1 = $db->transaction(function ($trx) use (&$executionLog) {
-            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Grace'], 's'));
+            $row = $trx->fetchOne('SELECT balance FROM accounts WHERE name = ? FOR UPDATE', ['Grace'], 's');
             $executionLog[] = 'T1-start';
 
             $newBalance = (float)$row['balance'] + 100;
-            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds'));
+            $trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Grace'], 'ds');
             $executionLog[] = 'T1-end';
         });
 
         $promise2 = $db->transaction(function ($trx) use (&$executionLog) {
-            $row = await($trx->fetchOne("SELECT balance FROM accounts WHERE name = ? FOR UPDATE", ['Henry'], 's'));
+            $row = $trx->fetchOne('SELECT balance FROM accounts WHERE name = ? FOR UPDATE', ['Henry'], 's');
             $executionLog[] = 'T2-start';
 
             $newBalance = (float)$row['balance'] + 200;
-            await($trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Henry'], 'ds'));
+            $trx->execute('UPDATE accounts SET balance = ? WHERE name = ?', [$newBalance, 'Henry'], 'ds');
             $executionLog[] = 'T2-end';
         });
 
@@ -378,13 +382,15 @@ describe('AsyncMySQLConnection Transactions', function () {
         expect($executionLog)->toContain('T1-start')
             ->and($executionLog)->toContain('T2-start')
             ->and($executionLog)->toContain('T1-end')
-            ->and($executionLog)->toContain('T2-end');
+            ->and($executionLog)->toContain('T2-end')
+        ;
 
         $graceBalance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Grace'")->await();
         $henryBalance = $db->fetchValue("SELECT balance FROM accounts WHERE name = 'Henry'")->await();
 
         expect((float)$graceBalance)->toBe(1100.00)
-            ->and((float)$henryBalance)->toBe(2200.00);
+            ->and((float)$henryBalance)->toBe(2200.00)
+        ;
 
         $db->execute('DROP TABLE IF EXISTS accounts')->await();
     });
@@ -404,7 +410,7 @@ describe('AsyncMySQLConnection Transactions', function () {
         $commitCalled = false;
 
         $db->transaction(function ($trx) use (&$commitCalled) {
-            await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Helen', 500.00], 'sd'));
+            $trx->execute('INSERT INTO accounts (name, balance) VALUES (?, ?)', ['Helen', 500.00], 'sd');
 
             $trx->onCommit(function () use (&$commitCalled) {
                 $commitCalled = true;
@@ -432,7 +438,7 @@ describe('AsyncMySQLConnection Transactions', function () {
 
         try {
             $db->transaction(function ($trx) use (&$rollbackCalled) {
-                await($trx->execute("INSERT INTO accounts (name, balance) VALUES (?, ?)", ['Ivan', 300.00], 'sd'));
+                $trx->execute('INSERT INTO accounts (name, balance) VALUES (?, ?)', ['Ivan', 300.00], 'sd');
 
                 $trx->onRollback(function () use (&$rollbackCalled) {
                     $rollbackCalled = true;
@@ -453,7 +459,7 @@ describe('AsyncMySQLConnection Transactions', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
         $level = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         }, isolationLevel: IsolationLevel::SERIALIZABLE)->await();
 
         expect($level)->toBe('SERIALIZABLE');
@@ -463,7 +469,7 @@ describe('AsyncMySQLConnection Transactions', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
         $level = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         }, isolationLevel: IsolationLevel::READ_COMMITTED)->await();
 
         expect($level)->toBe('READ-COMMITTED');
@@ -473,7 +479,7 @@ describe('AsyncMySQLConnection Transactions', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
         $level = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         }, isolationLevel: IsolationLevel::READ_UNCOMMITTED)->await();
 
         expect($level)->toBe('READ-UNCOMMITTED');
@@ -483,7 +489,7 @@ describe('AsyncMySQLConnection Transactions', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
         $level = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         })->await();
 
         expect($level)->toBe('REPEATABLE-READ');
@@ -493,13 +499,13 @@ describe('AsyncMySQLConnection Transactions', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
         $level1 = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         }, isolationLevel: IsolationLevel::SERIALIZABLE)->await();
 
         expect($level1)->toBe('SERIALIZABLE');
 
         $level2 = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         })->await();
 
         expect($level2)->toBe('REPEATABLE-READ');
@@ -509,13 +515,13 @@ describe('AsyncMySQLConnection Transactions', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
         $level1 = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         }, isolationLevel: IsolationLevel::READ_COMMITTED)->await();
 
         expect($level1)->toBe('READ-COMMITTED');
 
         $level2 = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         })->await();
 
         expect($level2)->toBe('REPEATABLE-READ');
@@ -527,19 +533,19 @@ describe('AsyncMySQLConnection Transactions', function () {
         $levels = [];
 
         $levels[] = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         }, isolationLevel: IsolationLevel::SERIALIZABLE)->await();
 
         $levels[] = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         })->await();
 
         $levels[] = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         }, isolationLevel: IsolationLevel::READ_COMMITTED)->await();
 
         $levels[] = $db->transaction(function ($trx) {
-            return await($trx->fetchValue('SELECT @@transaction_isolation'));
+            return $trx->fetchValue('SELECT @@transaction_isolation');
         })->await();
 
         expect($levels)->toBe([
@@ -554,13 +560,15 @@ describe('AsyncMySQLConnection Transactions', function () {
         $db = new AsyncMySQLConnection(TestHelper::getTestConfig(), 5);
 
         $promise1 = $db->transaction(function ($trx) {
-            $level = await($trx->fetchValue('SELECT @@transaction_isolation'));
+            $level = $trx->fetchValue('SELECT @@transaction_isolation');
             sleep(0.1);
+
             return $level;
         }, isolationLevel: IsolationLevel::SERIALIZABLE);
 
         $promise2 = $db->transaction(function ($trx) {
-            $level = await($trx->fetchValue('SELECT @@transaction_isolation'));
+            $level = $trx->fetchValue('SELECT @@transaction_isolation');
+
             return $level;
         });
 
