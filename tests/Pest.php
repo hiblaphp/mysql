@@ -138,20 +138,16 @@ function makeClient(
 function makeTransactionClient(int $maxConnections = 5): MysqlClient
 {
     return new MysqlClient(
-        testMysqlConfig(),
-        $maxConnections,
-        300,
-        3600
+        config: testMysqlConfig(),
+        minConnections: $maxConnections,
     );
 }
 
 function makeConcurrentClient(int $maxConnections = 10): MysqlClient
 {
     return new MysqlClient(
-        testMysqlConfig(),
-        $maxConnections,
-        300,
-        3600
+        config: testMysqlConfig(),
+        maxConnections: $maxConnections,
     );
 }
 
@@ -172,12 +168,12 @@ function makeCompressedClient(
     ]);
 
     return new MysqlClient(
-        $params,
-        $maxConnections,
-        $idleTimeout,
-        $maxLifetime,
-        $statementCacheSize,
-        $enableStatementCache
+        config: $params,
+        maxConnections: $maxConnections,
+        idleTimeout: $idleTimeout,
+        maxLifetime: $maxLifetime,
+        statementCacheSize: $statementCacheSize,
+        enableStatementCache: $enableStatementCache
     );
 }
 
@@ -237,7 +233,7 @@ function makeNoResetClient(int $maxConnections = 1): MysqlClient
 function makeResetClient(int $maxConnections = 1): MysqlClient
 {
     return new MysqlClient(
-        [
+        config: [
             'host' => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
             'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3306),
             'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
@@ -246,7 +242,7 @@ function makeResetClient(int $maxConnections = 1): MysqlClient
             'reset_connection' => true,
             'enable_server_side_cancellation' => false,
         ],
-        $maxConnections
+        maxConnections:$maxConnections
     );
 }
 
@@ -271,7 +267,7 @@ function makeTimeoutClient(int $maxConnections = 1, float $acquireTimeout = 1.0)
 function makeMultiStatementClient(int $maxConnections = 5): MysqlClient
 {
     return new MysqlClient(
-        [
+        config: [
             'host' => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
             'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3306),
             'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
@@ -279,7 +275,7 @@ function makeMultiStatementClient(int $maxConnections = 5): MysqlClient
             'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
             'multi_statements' => true,
         ],
-        $maxConnections
+        maxConnections:$maxConnections
     );
 }
 
