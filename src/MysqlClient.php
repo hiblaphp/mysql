@@ -83,18 +83,23 @@ final class MysqlClient implements SqlClientInterface
      * independent from other instances, allowing true multi-database support.
      *
      * @param MysqlConfig|array<string, mixed>|string $config Database configuration.
+     * @param int  $minConnections Minimum number of connections to keep open.
      * @param int  $maxConnections Maximum number of connections in the pool.
      * @param int  $idleTimeout Seconds a connection can remain idle before being closed.
      * @param int  $maxLifetime Maximum seconds a connection can live before being rotated.
      * @param int  $statementCacheSize   Maximum number of prepared statements to cache per connection.
      * @param bool $enableStatementCache Whether to enable prepared statement caching. Defaults to true.
-     * @param bool $enableServerSideCancellation Whether to dispatch KILL QUERY to the server when a
-     *                                           query promise is cancelled. Defaults to true.
-     * @param bool $resetConnection Whether to issue COM_RESET_CONNECTION before returning
-     *                                      connections to the pool. Clears all session state, variables,
-     *                                      and prepared statements. Defaults to false.
      * @param int  $maxWaiters Maximum number of requests that can wait for a connection
      *                         before throwing a PoolException. 0 means unlimited. Defaults to 0.
+     * @param float $acquireTimeout Maximum seconds to wait for a connection from the pool.
+     * @param bool|null $enableServerSideCancellation Explicit override for the cancellation strategy.
+     *                                                - If `true` or `false`: Overrides the setting in `$config`.
+     *                                                - If `null`: Uses the value defined in `$config`.
+     * @param bool|null $resetConnection Explicit override for connection resetting behavior.
+     *                                   - If `true` or `false`: Overrides the setting in `$config`.
+     *                                   - If `null`: Uses the value defined in `$config`.
+     * @param callable|null $onConnect Optional hook invoked on new connections.
+     * @param ConnectorInterface|null $connector Optional custom socket connector.
      *
      * @throws ConfigurationException If configuration is invalid.
      */
@@ -106,39 +111,60 @@ final class MysqlClient implements SqlClientInterface
         int $maxLifetime = 3600,
         int $statementCacheSize = 256,
         bool $enableStatementCache = true,
-        bool $enableServerSideCancellation = false,
-        bool $resetConnection = false,
         int $maxWaiters = 0,
         float $acquireTimeout = 10.0,
+        ?bool $enableServerSideCancellation = null,
+        ?bool $resetConnection = null,
         ?callable $onConnect = null,
         ?ConnectorInterface $connector = null,
     ) {
         try {
-            // Ensure the resetConnection parameter is passed along if the config is an array or string
-            if (\is_array($config)) {
-                $config['reset_connection'] ??= $resetConnection;
-            } elseif (\is_string($config)) {
-                $separator = str_contains($config, '?') ? '&' : '?';
-                if (! str_contains($config, 'reset_connection=')) {
-                    $config .= $separator . 'reset_connection=' . ($resetConnection ? 'true' : 'false');
-                }
+            $params = match (true) {
+                $config instanceof MysqlConfig => $config,
+                \is_array($config) => MysqlConfig::fromArray($config),
+                \is_string($config) => MysqlConfig::fromUri($config),
+            };
+
+            $finalCancellation = $enableServerSideCancellation ?? $params->enableServerSideCancellation;
+            $finalReset = $resetConnection ?? $params->resetConnection;
+
+            if ($finalCancellation !== $params->enableServerSideCancellation || $finalReset !== $params->resetConnection) {
+                $params = new MysqlConfig(
+                    host: $params->host,
+                    port: $params->port,
+                    username: $params->username,
+                    password: $params->password,
+                    database: $params->database,
+                    charset: $params->charset,
+                    connectTimeout: $params->connectTimeout,
+                    ssl: $params->ssl,
+                    sslCa: $params->sslCa,
+                    sslCert: $params->sslCert,
+                    sslKey: $params->sslKey,
+                    sslVerify: $params->sslVerify,
+                    killTimeoutSeconds: $params->killTimeoutSeconds,
+                    enableServerSideCancellation: $finalCancellation,
+                    compress: $params->compress,
+                    resetConnection: $finalReset,
+                    multiStatements: $params->multiStatements,
+                );
             }
 
             $this->pool = new PoolManager(
-                config: $config,
+                config: $params,
                 minSize: $minConnections,
                 maxSize: $maxConnections,
                 idleTimeout: $idleTimeout,
                 maxLifetime: $maxLifetime,
-                enableServerSideCancellation: $enableServerSideCancellation,
+                enableServerSideCancellation: null,
                 connector: $connector,
                 maxWaiters: $maxWaiters,
                 acquireTimeout: $acquireTimeout,
                 onConnect: $onConnect,
             );
 
-            // Cache the resolved setting from the pool to avoid array lookups on every query
-            $this->resetConnectionEnabled = (bool) ($this->pool->getStats()['reset_connection_enabled'] ?? false);
+            // Cache the resolved settings locally
+            $this->resetConnectionEnabled = $params->resetConnection;
             $this->statementCacheSize = $statementCacheSize;
             $this->enableStatementCache = $enableStatementCache;
 

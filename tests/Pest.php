@@ -112,9 +112,15 @@ function makeConnection(bool $enableServerSideCancellation = false): Connection
     return $conn;
 }
 
-function makePool(int $maxSize = 5, int $idleTimeout = 300, int $maxLifetime = 3600): PoolManager
+function makePool(int $maxSize = 5, int $idleTimeout = 300, int $maxLifetime = 3600, bool $enableServerSideCancellation = false): PoolManager
 {
-    return new PoolManager(testMysqlConfig(), $maxSize, $idleTimeout, $maxLifetime);
+    return new PoolManager(
+        config: testMysqlConfig(),
+        maxSize: $maxSize,
+        idleTimeout: $idleTimeout,
+        maxLifetime: $maxLifetime,
+        enableServerSideCancellation: $enableServerSideCancellation
+    );
 }
 
 function makeClient(
@@ -128,6 +134,7 @@ function makeClient(
     return new MysqlClient(
         config: testMysqlConfig($enableServerSideCancellation),
         minConnections: $maxConnections,
+        maxConnections: $maxConnections,
         maxLifetime: $maxLifetime,
         idleTimeout: $idleTimeout,
         statementCacheSize: $statementCacheSize,
@@ -135,11 +142,13 @@ function makeClient(
     );
 }
 
-function makeTransactionClient(int $maxConnections = 5): MysqlClient
+function makeTransactionClient(int $maxConnections = 5, bool $enableServerSideCancellation = false): MysqlClient
 {
     return new MysqlClient(
         config: testMysqlConfig(),
         minConnections: $maxConnections,
+        maxConnections: $maxConnections,
+        enableServerSideCancellation: $enableServerSideCancellation
     );
 }
 
@@ -225,8 +234,9 @@ function makeResettableConnection(): Connection
 function makeNoResetClient(int $maxConnections = 1): MysqlClient
 {
     return new MysqlClient(
-        testMysqlConfig(),
-        $maxConnections
+        config: testMysqlConfig(),
+        minConnections: $maxConnections,
+        maxConnections: $maxConnections
     );
 }
 
@@ -242,7 +252,7 @@ function makeResetClient(int $maxConnections = 1): MysqlClient
             'reset_connection' => true,
             'enable_server_side_cancellation' => false,
         ],
-        maxConnections:$maxConnections
+        maxConnections: $maxConnections
     );
 }
 
@@ -275,7 +285,7 @@ function makeMultiStatementClient(int $maxConnections = 5): MysqlClient
             'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
             'multi_statements' => true,
         ],
-        maxConnections:$maxConnections
+        maxConnections: $maxConnections
     );
 }
 

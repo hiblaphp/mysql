@@ -12,22 +12,21 @@ use Hibla\Promise\Exceptions\CancelledException;
 describe('Pool Waiter Cancellation', function (): void {
 
     it('throws CancelledException when awaiting a cancelled waiter', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
         $waiter = $pool->get();
         $waiter->cancel();
 
-        expect(fn () => await($waiter))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($waiter))
+            ->toThrow(CancelledException::class);
 
         $pool->release($conn);
         $pool->close();
     });
 
     it('does not decrement active connections when a waiter is cancelled', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
         expect($pool->getStats()['active_connections'])->toBe(1);
@@ -42,7 +41,7 @@ describe('Pool Waiter Cancellation', function (): void {
     });
 
     it('skips a cancelled waiter and resolves the next active waiter on release', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
         $cancelledWaiter = $pool->get();
@@ -52,12 +51,15 @@ describe('Pool Waiter Cancellation', function (): void {
 
         $cancelledWaiter->cancel();
 
-        // Lazy cleanup — cancelled waiter is still in the queue until dequeue
-        expect($pool->getStats()['waiting_requests'])->toBe(2);
+        expect($pool->getStats()['waiting_requests'])->toBe(1);
 
         $pool->release($conn);
 
         $resolvedConn = await($activeWaiter);
+
+        // Give the Event Loop a moment to process the 'finally' callback 
+        // that decrements the pendingWaiters counter.
+        await(delay(0.01));
 
         expect($resolvedConn)->toBeInstanceOf(Connection::class)
             ->and($resolvedConn->isReady())->toBeTrue()
@@ -69,7 +71,7 @@ describe('Pool Waiter Cancellation', function (): void {
     });
 
     it('returns the connection to the pool when released after skipping a cancelled waiter', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
         $waiter = $pool->get();
@@ -84,7 +86,7 @@ describe('Pool Waiter Cancellation', function (): void {
     });
 
     it('handles multiple cancelled waiters and resolves the first active one', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
         $w1 = $pool->get();
@@ -110,7 +112,7 @@ describe('Pool Waiter Cancellation', function (): void {
 describe('Pool Drain and Release', function (): void {
 
     it('absorbs stale kill flag via DO SLEEP(0) before returning connection to pool', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
         $queryPromise = $conn->query('SELECT SLEEP(10)');
@@ -119,9 +121,8 @@ describe('Pool Drain and Release', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn () => await($queryPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($queryPromise))
+            ->toThrow(CancelledException::class);
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
@@ -139,7 +140,7 @@ describe('Pool Drain and Release', function (): void {
     });
 
     it('connection is healthy and reusable after pool drains the stale kill flag', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
         $queryPromise = $conn->query('SELECT SLEEP(10)');
@@ -148,9 +149,8 @@ describe('Pool Drain and Release', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn () => await($queryPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($queryPromise))
+            ->toThrow(CancelledException::class);
 
         $pool->release($conn);
 
@@ -169,7 +169,7 @@ describe('Pool Drain and Release', function (): void {
     });
 
     it('pool does not expose a cancelled connection to the next waiter before drain completes', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
         $queryPromise = $conn->query('SELECT SLEEP(10)');
@@ -178,9 +178,8 @@ describe('Pool Drain and Release', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn () => await($queryPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($queryPromise))
+            ->toThrow(CancelledException::class);
 
         // Queue a waiter before releasing
         $waiter = $pool->get();
@@ -204,7 +203,7 @@ describe('Pool Drain and Release', function (): void {
     });
 
     test('draining connections are closed safely when pool is closed mid-drain', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
         $queryPromise = $conn->query('SELECT SLEEP(10)');
@@ -213,9 +212,8 @@ describe('Pool Drain and Release', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn () => await($queryPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($queryPromise))
+            ->toThrow(CancelledException::class);
 
         $pool->release($conn);
 
@@ -231,7 +229,7 @@ describe('Pool Drain and Release', function (): void {
 describe('Pool Query Cancellation Integration', function (): void {
 
     it('cancels a plain query obtained via the pool and throws CancelledException', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
         $startTime = microtime(true);
 
@@ -241,9 +239,8 @@ describe('Pool Query Cancellation Integration', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn () => await($queryPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($queryPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -252,7 +249,7 @@ describe('Pool Query Cancellation Integration', function (): void {
     });
 
     it('cancels a prepared statement obtained via the pool and throws CancelledException', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
         $startTime = microtime(true);
 
@@ -263,9 +260,8 @@ describe('Pool Query Cancellation Integration', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn () => await($execPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($execPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -275,7 +271,7 @@ describe('Pool Query Cancellation Integration', function (): void {
     });
 
     it('cancels a stream query obtained via the pool and throws CancelledException', function (): void {
-        $pool = makePool(1);
+        $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
         $startTime = microtime(true);
 
@@ -285,9 +281,8 @@ describe('Pool Query Cancellation Integration', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -296,7 +291,7 @@ describe('Pool Query Cancellation Integration', function (): void {
     });
 
     test('pool stats are consistent after a cancelled query is released and drained', function (): void {
-        $pool = makePool(2);
+        $pool = makePool(maxSize: 2, enableServerSideCancellation: true);
         $conn1 = await($pool->get());
         $conn2 = await($pool->get());
 
@@ -306,9 +301,8 @@ describe('Pool Query Cancellation Integration', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn () => await($queryPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($queryPromise))
+            ->toThrow(CancelledException::class);
 
         $pool->release($conn1);
         $pool->release($conn2);
@@ -327,7 +321,7 @@ describe('Pool Query Cancellation Integration', function (): void {
     });
 
     test('pool remains fully operational after multiple cancellations across connections', function (): void {
-        $pool = makePool(3);
+        $pool = makePool(maxSize: 3, enableServerSideCancellation: true);
 
         for ($i = 0; $i < 3; $i++) {
             $conn = await($pool->get());
@@ -337,9 +331,8 @@ describe('Pool Query Cancellation Integration', function (): void {
                 $queryPromise->cancel();
             });
 
-            expect(fn () => await($queryPromise))
-                ->toThrow(CancelledException::class)
-            ;
+            expect(fn() => await($queryPromise))
+                ->toThrow(CancelledException::class);
 
             $pool->release($conn);
         }

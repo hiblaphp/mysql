@@ -242,7 +242,10 @@ class Transaction implements TransactionInterface
 
         $this->active = false;
 
-        return $this->connection->query('COMMIT')
+        $promise = $this->connection->query('COMMIT');
+        $promise->finally($this->releaseConnection(...));
+
+        return $promise
             ->then(
                 function (): void {
                     $this->executeCallbacks($this->onCommitCallbacks);
@@ -255,9 +258,7 @@ class Transaction implements TransactionInterface
                         $e
                     );
                 }
-            )
-            ->finally($this->releaseConnection(...))
-        ;
+            );
     }
 
     /**
@@ -276,7 +277,10 @@ class Transaction implements TransactionInterface
         $this->active = false;
         $this->failed = false;
 
-        return $this->connection->query('ROLLBACK')
+        $promise = $this->connection->query('ROLLBACK');
+        $promise->finally($this->releaseConnection(...));
+
+        return $promise
             ->then(
                 function (): void {
                     $this->executeCallbacks($this->onRollbackCallbacks);

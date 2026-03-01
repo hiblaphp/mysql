@@ -9,7 +9,7 @@ use Hibla\Promise\Exceptions\CancelledException;
 use Hibla\Sql\Exceptions\QueryException;
 
 beforeAll(function (): void {
-    $conn = makeConnection();
+    $conn = makeConnection(enableServerSideCancellation: true);
     await($conn->query('DROP TABLE IF EXISTS cancel_test'));
     await($conn->query('
             CREATE TABLE cancel_test (
@@ -21,20 +21,20 @@ beforeAll(function (): void {
 });
 
 afterAll(function (): void {
-    $conn = makeConnection();
+    $conn = makeConnection(enableServerSideCancellation: true);
     await($conn->query('DROP TABLE IF EXISTS cancel_test'));
     $conn->close();
 });
 
 beforeEach(function (): void {
-    $conn = makeConnection();
+    $conn = makeConnection(enableServerSideCancellation: true);
     await($conn->query('TRUNCATE TABLE cancel_test'));
     $conn->close();
 });
 
 describe('Transaction Cancellation', function (): void {
     it('cancels a non-prepared INSERT inside a transaction and throws CancelledException', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
         await($conn->query('START TRANSACTION'));
@@ -46,9 +46,8 @@ describe('Transaction Cancellation', function (): void {
             $insertPromise->cancel();
         });
 
-        expect(fn () => await($insertPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($insertPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -56,7 +55,7 @@ describe('Transaction Cancellation', function (): void {
     });
 
     test('rollback after a cancelled INSERT inside a transaction persists no rows', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         await($conn->query('START TRANSACTION'));
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('row1')"));
@@ -67,9 +66,8 @@ describe('Transaction Cancellation', function (): void {
             $insertPromise->cancel();
         });
 
-        expect(fn () => await($insertPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($insertPromise))
+            ->toThrow(CancelledException::class);
 
         if ($conn->wasQueryCancelled()) {
             try {
@@ -90,7 +88,7 @@ describe('Transaction Cancellation', function (): void {
     });
 
     it('cancels a prepared INSERT inside a transaction and throws CancelledException', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
         await($conn->query('START TRANSACTION'));
@@ -103,9 +101,8 @@ describe('Transaction Cancellation', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn () => await($execPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($execPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -115,7 +112,7 @@ describe('Transaction Cancellation', function (): void {
     });
 
     test('transaction can continue and commit after a cancelled prepared INSERT', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         await($conn->query('START TRANSACTION'));
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('prepared_row1')"));
@@ -127,9 +124,8 @@ describe('Transaction Cancellation', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn () => await($execPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($execPromise))
+            ->toThrow(CancelledException::class);
 
         if ($conn->wasQueryCancelled()) {
             try {
@@ -157,7 +153,7 @@ describe('Transaction Cancellation', function (): void {
     });
 
     it('cancels a streaming SELECT inside a transaction and throws CancelledException', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
         await($conn->query('START TRANSACTION'));
@@ -169,9 +165,8 @@ describe('Transaction Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -180,7 +175,7 @@ describe('Transaction Cancellation', function (): void {
     });
 
     test('connection can still query after a cancelled stream inside a transaction', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         await($conn->query('START TRANSACTION'));
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('stream_test1'), ('stream_test2'), ('stream_test3')"));
@@ -191,9 +186,8 @@ describe('Transaction Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         if ($conn->wasQueryCancelled()) {
             try {
@@ -214,7 +208,7 @@ describe('Transaction Cancellation', function (): void {
     });
 
     test('rollback after a cancelled stream inside a transaction persists no rows', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         await($conn->query('START TRANSACTION'));
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('stream_test1'), ('stream_test2'), ('stream_test3')"));
@@ -225,9 +219,8 @@ describe('Transaction Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         if ($conn->wasQueryCancelled()) {
             try {
@@ -248,7 +241,7 @@ describe('Transaction Cancellation', function (): void {
     });
 
     it('cancels an UPDATE inside a transaction and throws CancelledException', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('original1'), ('original2')"));
@@ -261,9 +254,8 @@ describe('Transaction Cancellation', function (): void {
             $updatePromise->cancel();
         });
 
-        expect(fn () => await($updatePromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($updatePromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -272,7 +264,7 @@ describe('Transaction Cancellation', function (): void {
     });
 
     test('can perform another UPDATE after a cancelled UPDATE inside a transaction', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('original1'), ('original2')"));
 
@@ -284,9 +276,8 @@ describe('Transaction Cancellation', function (): void {
             $updatePromise->cancel();
         });
 
-        expect(fn () => await($updatePromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($updatePromise))
+            ->toThrow(CancelledException::class);
 
         if ($conn->wasQueryCancelled()) {
             try {
@@ -306,7 +297,7 @@ describe('Transaction Cancellation', function (): void {
     });
 
     test('rollback after a cancelled UPDATE restores original row values', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('original1'), ('original2')"));
 
@@ -318,9 +309,8 @@ describe('Transaction Cancellation', function (): void {
             $updatePromise->cancel();
         });
 
-        expect(fn () => await($updatePromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($updatePromise))
+            ->toThrow(CancelledException::class);
 
         if ($conn->wasQueryCancelled()) {
             try {

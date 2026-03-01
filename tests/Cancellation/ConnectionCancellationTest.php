@@ -13,7 +13,7 @@ use Hibla\Promise\Exceptions\CancelledException;
 describe('Query Cancellation', function (): void {
 
     it('cancels a long-running query and throws CancelledException', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
         $queryPromise = $conn->query('SELECT SLEEP(10)');
@@ -22,9 +22,8 @@ describe('Query Cancellation', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn () => await($queryPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($queryPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -32,7 +31,7 @@ describe('Query Cancellation', function (): void {
     });
 
     it('marks the connection as cancelled after a query is cancelled', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $queryPromise = $conn->query('SELECT SLEEP(10)');
 
@@ -40,9 +39,8 @@ describe('Query Cancellation', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn () => await($queryPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($queryPromise))
+            ->toThrow(CancelledException::class);
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
@@ -50,7 +48,7 @@ describe('Query Cancellation', function (): void {
     });
 
     it('can clear the cancelled flag after cancellation', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $queryPromise = $conn->query('SELECT SLEEP(10)');
 
@@ -58,9 +56,8 @@ describe('Query Cancellation', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn () => await($queryPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($queryPromise))
+            ->toThrow(CancelledException::class);
 
         $conn->clearCancelledFlag();
 
@@ -73,7 +70,7 @@ describe('Query Cancellation', function (): void {
 describe('Prepared Statement Cancellation', function (): void {
 
     it('cancels a long-running prepared statement execution', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
@@ -83,9 +80,8 @@ describe('Prepared Statement Cancellation', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn () => await($execPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($execPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -94,7 +90,7 @@ describe('Prepared Statement Cancellation', function (): void {
     });
 
     it('marks the connection as cancelled after a prepared statement is cancelled', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
         $execPromise = $stmt->execute([10]);
@@ -103,9 +99,8 @@ describe('Prepared Statement Cancellation', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn () => await($execPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($execPromise))
+            ->toThrow(CancelledException::class);
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
@@ -114,7 +109,7 @@ describe('Prepared Statement Cancellation', function (): void {
     });
 
     it('recovers and reuses the connection after a prepared statement is cancelled', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
         $execPromise = $stmt->execute([10]);
@@ -123,9 +118,8 @@ describe('Prepared Statement Cancellation', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn () => await($execPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($execPromise))
+            ->toThrow(CancelledException::class);
 
         if ($conn->wasQueryCancelled()) {
             await($conn->query('DO SLEEP(0)'));
@@ -145,7 +139,7 @@ describe('Prepared Statement Cancellation', function (): void {
 
 describe('Stream Query Cancellation', function (): void {
     it('cancels a streaming query before the first row arrives and throws CancelledException', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
         $streamPromise = $conn->streamQuery('SELECT SLEEP(10)');
@@ -154,9 +148,8 @@ describe('Stream Query Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -164,7 +157,7 @@ describe('Stream Query Cancellation', function (): void {
     });
 
     it('marks the connection as cancelled after a stream is cancelled before first row', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $streamPromise = $conn->streamQuery('SELECT SLEEP(10)');
 
@@ -172,9 +165,8 @@ describe('Stream Query Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
@@ -182,7 +174,7 @@ describe('Stream Query Cancellation', function (): void {
     });
 
     it('recovers and reuses the connection after a stream is cancelled before first row', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $streamPromise = $conn->streamQuery('SELECT SLEEP(10)');
 
@@ -190,9 +182,8 @@ describe('Stream Query Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         if ($conn->wasQueryCancelled()) {
             await($conn->query('DO SLEEP(0)'));
@@ -209,7 +200,7 @@ describe('Stream Query Cancellation', function (): void {
     });
 
     it('cancels mid-iteration via break and stream reports as cancelled', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stream = await($conn->streamQuery(twentyRowSql()));
 
@@ -235,7 +226,7 @@ describe('Stream Query Cancellation', function (): void {
     });
 
     test('wasQueryCancelled is false when cancelling a fully-buffered stream mid-iteration', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stream = await($conn->streamQuery(twentyRowSql()));
 
@@ -251,7 +242,7 @@ describe('Stream Query Cancellation', function (): void {
     });
 
     test('connection remains healthy after cancelling a fully-buffered stream mid-iteration', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stream = await($conn->streamQuery(twentyRowSql()));
 
@@ -269,7 +260,7 @@ describe('Stream Query Cancellation', function (): void {
     });
 
     it('cancels mid-iteration via async timer between rows and throws CancelledException', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stream = await($conn->streamQuery(twentyRowSql()));
 
@@ -301,7 +292,7 @@ describe('Stream Query Cancellation', function (): void {
     });
 
     test('connection remains healthy after cancelling a stream via async timer between rows', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stream = await($conn->streamQuery(twentyRowSql()));
 
@@ -335,7 +326,7 @@ describe('Stream Query Cancellation', function (): void {
 
 describe('Execute Stream Cancellation', function (): void {
     it('cancels executeStream before the first row arrives and throws CancelledException', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
@@ -345,9 +336,8 @@ describe('Execute Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -356,7 +346,7 @@ describe('Execute Stream Cancellation', function (): void {
     });
 
     it('marks the connection as cancelled after executeStream is cancelled before first row', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
         $streamPromise = $stmt->executeStream([10]);
@@ -365,9 +355,8 @@ describe('Execute Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
@@ -376,7 +365,7 @@ describe('Execute Stream Cancellation', function (): void {
     });
 
     it('recovers and reuses the connection after executeStream is cancelled before first row', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
         $streamPromise = $stmt->executeStream([10]);
@@ -385,9 +374,8 @@ describe('Execute Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         if ($conn->wasQueryCancelled()) {
             await($conn->query('DO SLEEP(0)'));
@@ -405,7 +393,7 @@ describe('Execute Stream Cancellation', function (): void {
     });
 
     it('cancels executeStream mid-iteration via break and stream reports as cancelled', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare(twentyRowPreparedSql()));
         $stream = await($stmt->executeStream([]));
@@ -433,7 +421,7 @@ describe('Execute Stream Cancellation', function (): void {
     });
 
     test('wasQueryCancelled is false when cancelling a fully-buffered executeStream mid-iteration', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare(twentyRowPreparedSql()));
         $stream = await($stmt->executeStream([]));
@@ -451,7 +439,7 @@ describe('Execute Stream Cancellation', function (): void {
     });
 
     test('connection remains healthy after cancelling a fully-buffered executeStream mid-iteration', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare(twentyRowPreparedSql()));
         $stream = await($stmt->executeStream([]));
@@ -471,7 +459,7 @@ describe('Execute Stream Cancellation', function (): void {
     });
 
     it('cancels executeStream mid-iteration via async timer between rows and throws CancelledException', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare(twentyRowPreparedSql()));
         $stream = await($stmt->executeStream([]));
@@ -505,7 +493,7 @@ describe('Execute Stream Cancellation', function (): void {
     });
 
     test('connection remains healthy after cancelling executeStream via async timer between rows', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare(twentyRowPreparedSql()));
         $stream = await($stmt->executeStream([]));
@@ -539,7 +527,7 @@ describe('Execute Stream Cancellation', function (): void {
     });
 
     it('can reuse a prepared statement after executeStream is cancelled', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
         $streamPromise = $stmt->executeStream([5]);
@@ -548,9 +536,8 @@ describe('Execute Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         if ($conn->wasQueryCancelled()) {
             await($conn->query('DO SLEEP(0)'));
@@ -575,7 +562,7 @@ describe('Execute Stream Cancellation', function (): void {
     });
 
     test('connection is fully healthy after all executeStream cancellation scenarios', function (): void {
-        $conn = makeConnection();
+        $conn = makeConnection(enableServerSideCancellation: true);
 
         $result = await($conn->query('SELECT "AllGreen" AS status'));
 

@@ -150,18 +150,17 @@ class PoolManager
      * @param int $minSize Minimum number of connections to keep open (default: 1).
      * @param int $idleTimeout Seconds before an idle connection is closed.
      * @param int $maxLifetime Seconds before a connection is rotated.
-     * @param bool $enableServerSideCancellation Whether cancelling a query promise dispatches
-     *                                           KILL QUERY to the server. Defaults to false.
      * @param int $maxWaiters Maximum number of requests allowed in the queue
      *                        waiting for a connection. 0 means unlimited.
      * @param float $acquireTimeout Maximum seconds to wait for a connection before giving up.
      *                              0.0 means unlimited (wait forever).
+     * @param bool|null $enableServerSideCancellation Whether cancelling a query promise dispatches
+     *                                                KILL QUERY to the server. If null, the value
+     *                                                from $config is used.
      * @param ConnectorInterface|null $connector Optional custom socket connector.
      * @param (callable(ConnectionSetupInterface): (PromiseInterface<mixed>|void))|null $onConnect
      *        Optional hook invoked once per physical connection immediately after the MySQL
-     *        handshake completes. Use it to set session variables, select a default schema,
-     *        or configure character sets. Both sync and async (promise-returning) callables
-     *        are accepted. If the hook rejects or throws, the connection is dropped entirely.
+     *        handshake completes.
      */
     public function __construct(
         MysqlConfig|array|string $config,
@@ -169,9 +168,9 @@ class PoolManager
         int $minSize = 1,
         int $idleTimeout = 300,
         int $maxLifetime = 3600,
-        bool $enableServerSideCancellation = false,
         int $maxWaiters = 0,
         float $acquireTimeout = 0.0,
+        ?bool $enableServerSideCancellation = null,
         ?ConnectorInterface $connector = null,
         ?callable $onConnect = null,
     ) {
@@ -181,12 +180,14 @@ class PoolManager
             \is_string($config) => MysqlConfig::fromUri($config),
         };
 
-        // Apply the pool-level override if it differs from what MysqlConfig
-        // carries. withQueryCancellation() returns a new immutable instance so
-        // the caller's original MysqlConfig is never mutated.
-        $this->MysqlConfig = $params->enableServerSideCancellation === $enableServerSideCancellation
-            ? $params
-            : $params->withQueryCancellation($enableServerSideCancellation);
+        // Apply override ONLY if explicitly provided as an argument (not null).
+        // If null, we trust whatever is already set in the MysqlConfig object.
+        if ($enableServerSideCancellation !== null && $params->enableServerSideCancellation !== $enableServerSideCancellation) {
+            $params = $params->withQueryCancellation($enableServerSideCancellation);
+        }
+
+        // Apply the pool-level override if it differs from what MysqlConfig carries.
+        $this->MysqlConfig = $params;
 
         if ($maxSize <= 0) {
             throw new InvalidArgumentException('Pool max size must be greater than 0');

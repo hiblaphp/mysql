@@ -86,7 +86,7 @@ describe('Client Query Cancellation', function (): void {
 
 describe('Client Waiter Cancellation', function (): void {
     it('cancels a queued waiter before it reaches the server and throws CancelledException', function (): void {
-        $client = makeClient(maxConnections: 5);
+        $client = makeClient(maxConnections: 5, enableServerSideCancellation: true);
 
         // Saturate the pool
         $holders = [];
@@ -115,7 +115,7 @@ describe('Client Waiter Cancellation', function (): void {
     });
 
     test('pool remains functional after a cancelled waiter', function (): void {
-        $client = makeClient(maxConnections: 5);
+        $client = makeClient(maxConnections: 5, enableServerSideCancellation: true);
 
         $holders = [];
         for ($i = 0; $i < 5; $i++) {

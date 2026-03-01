@@ -9,7 +9,7 @@ use Hibla\EventLoop\Loop;
 use Hibla\Promise\Exceptions\CancelledException;
 
 beforeAll(function (): void {
-    $client = makeClient();
+    $client = makeClient(enableServerSideCancellation: true);
     await($client->query('
         CREATE TABLE IF NOT EXISTS client_stream_test (
             id    INT PRIMARY KEY AUTO_INCREMENT,
@@ -32,7 +32,7 @@ beforeAll(function (): void {
 
 describe('Client Stream Cancellation', function (): void {
     it('cancels a non-prepared stream before the first row arrives and throws CancelledException', function (): void {
-        $client = makeClient();
+        $client = makeClient(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
         $streamPromise = $client->stream(
@@ -43,9 +43,8 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -53,7 +52,7 @@ describe('Client Stream Cancellation', function (): void {
     });
 
     test('pool connection is healthy after a cancelled non-prepared stream', function (): void {
-        $client = makeClient();
+        $client = makeClient(enableServerSideCancellation: true);
 
         $streamPromise = $client->stream(
             'SELECT value, SLEEP(10) AS delay FROM client_stream_test'
@@ -63,9 +62,8 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         await(delay(0.5));
 
@@ -77,7 +75,7 @@ describe('Client Stream Cancellation', function (): void {
     });
 
     it('cancels a prepared stream before the first row arrives and throws CancelledException', function (): void {
-        $client = makeClient();
+        $client = makeClient(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
         $streamPromise = $client->stream(
@@ -89,9 +87,8 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -99,7 +96,7 @@ describe('Client Stream Cancellation', function (): void {
     });
 
     test('pool connection is healthy after a cancelled prepared stream', function (): void {
-        $client = makeClient();
+        $client = makeClient(enableServerSideCancellation: true);
 
         $streamPromise = $client->stream(
             'SELECT value, SLEEP(?) AS delay FROM client_stream_test',
@@ -110,9 +107,8 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         await(delay(0.5));
 
@@ -124,7 +120,7 @@ describe('Client Stream Cancellation', function (): void {
     });
 
     it('cancels a stream mid-iteration after the first row and throws CancelledException', function (): void {
-        $client = makeClient();
+        $client = makeClient(enableServerSideCancellation: true);
 
         $stream = await($client->stream('SELECT value FROM client_stream_test'));
 
@@ -146,7 +142,7 @@ describe('Client Stream Cancellation', function (): void {
     });
 
     test('pool connection is healthy after a mid-iteration stream cancellation', function (): void {
-        $client = makeClient();
+        $client = makeClient(enableServerSideCancellation: true);
 
         $stream = await($client->stream('SELECT value FROM client_stream_test'));
 
@@ -168,7 +164,7 @@ describe('Client Stream Cancellation', function (): void {
     });
 
     test('cancelling an already-completed stream is a safe no-op', function (): void {
-        $client = makeClient();
+        $client = makeClient(enableServerSideCancellation: true);
 
         $stream = await($client->stream('SELECT value FROM client_stream_test'));
 
@@ -185,7 +181,7 @@ describe('Client Stream Cancellation', function (): void {
     });
 
     test('pool connection is healthy after cancelling an already-completed stream', function (): void {
-        $client = makeClient();
+        $client = makeClient(enableServerSideCancellation: true);
 
         $stream = await($client->stream('SELECT value FROM client_stream_test'));
 
@@ -203,7 +199,7 @@ describe('Client Stream Cancellation', function (): void {
     });
 
     it('cancels multiple concurrent streams and all throw CancelledException', function (): void {
-        $client = makeClient(maxConnections: 5);
+        $client = makeClient(maxConnections: 5, enableServerSideCancellation: true);
 
         $streamPromises = [];
         for ($i = 0; $i < 5; $i++) {
@@ -233,7 +229,7 @@ describe('Client Stream Cancellation', function (): void {
     });
 
     test('pool is fully functional after mass concurrent stream cancellation', function (): void {
-        $client = makeClient(maxConnections: 5);
+        $client = makeClient(maxConnections: 5, enableServerSideCancellation: true);
 
         $streamPromises = [];
         for ($i = 0; $i < 5; $i++) {
