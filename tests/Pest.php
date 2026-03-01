@@ -126,12 +126,12 @@ function makeClient(
     bool $enableServerSideCancellation = false
 ): MysqlClient {
     return new MysqlClient(
-        testMysqlConfig($enableServerSideCancellation),
-        $maxConnections,
-        $idleTimeout,
-        $maxLifetime,
-        $statementCacheSize,
-        $enableStatementCache
+        config: testMysqlConfig($enableServerSideCancellation),
+        minConnections: $maxConnections,
+        maxLifetime: $maxLifetime,
+        idleTimeout: $idleTimeout,
+        statementCacheSize: $statementCacheSize,
+        enableStatementCache: $enableStatementCache
     );
 }
 
