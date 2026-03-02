@@ -480,20 +480,25 @@ class PoolManager
     public function closeAsync(float $timeout = 0.0): PromiseInterface
     {
         if ($this->isClosing) {
-            return Promise::resolved(null);
+            $resolved = Promise::resolved();
+            return $resolved;
         }
 
         if ($this->isGracefulShutdown) {
-            return $this->shutdownPromise ?? Promise::resolved(null);
+            if ($this->shutdownPromise !== null) {
+                return $this->shutdownPromise;
+            }
+
+            $resolved = Promise::resolved();
+            return $resolved;
         }
 
         $this->isGracefulShutdown = true;
 
-        // Close idle connections immediately — they have no in-flight work.
-        while (! $this->pool->isEmpty()) {
+        while (!$this->pool->isEmpty()) {
             $connection = $this->pool->dequeue();
 
-            if (! $connection->isClosed()) {
+            if (!$connection->isClosed()) {
                 $connection->close();
             }
 
@@ -510,23 +515,28 @@ class PoolManager
         $shutdownPromise = new Promise();
         $this->shutdownPromise = $shutdownPromise;
 
-        // Immediately check if we are already drained
         $this->checkShutdownComplete();
 
-        // If a timeout is given, race the drain against it.
         if ($timeout > 0.0 && $this->shutdownPromise !== null) {
+            $pendingShutdown = $this->shutdownPromise;
+
             $timerId = Loop::addTimer($timeout, function (): void {
-                if ($this->shutdownPromise?->isPending()) {
+                if ($this->shutdownPromise !== null && $this->shutdownPromise->isPending()) {
                     $this->close();
                 }
             });
 
-            $this->shutdownPromise->finally(function () use ($timerId): void {
+            $pendingShutdown->finally(function () use ($timerId): void {
                 Loop::cancelTimer($timerId);
             })->catch(static function (): void {});
         }
 
-        return $this->shutdownPromise ?? Promise::resolved(null);
+        if ($this->shutdownPromise !== null) {
+            return $this->shutdownPromise;
+        }
+
+        $resolved = Promise::resolved();
+        return $resolved;
     }
 
 
@@ -544,7 +554,7 @@ class PoolManager
     {
         // If a graceful shutdown is pending, resolve it first so any caller
         // awaiting closeAsync() is not left hanging after we destroy everything.
-        if ($this->shutdownPromise?->isPending()) {
+        if ($this->shutdownPromise !== null && $this->shutdownPromise->isPending()) {
             $this->shutdownPromise->resolve(null);
             $this->shutdownPromise = null;
         }
@@ -717,7 +727,7 @@ class PoolManager
         $this->connectionCreatedAt = [];
         $this->isGracefulShutdown = false;
 
-        if ($this->shutdownPromise?->isPending()) {
+        if ($this->shutdownPromise !== null && $this->shutdownPromise->isPending()) {
             $this->shutdownPromise->resolve(null);
         }
 

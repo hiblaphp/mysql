@@ -598,7 +598,7 @@ final class MysqlClient implements SqlClientInterface
     {
         // Already force-closed — nothing to drain.
         if ($this->pool === null) {
-            return Promise::resolved(null);
+            return Promise::resolved();
         }
 
         // Already in graceful shutdown — return the same promise so all
