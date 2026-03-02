@@ -77,6 +77,21 @@ final class MysqlClient implements SqlClientInterface
     private bool $resetConnectionEnabled = false;
 
     /**
+     * Tracks whether a force-close is in progress so that the closeAsync()
+     * cleanup callback is a no-op if close() races with it.
+     */
+    private bool $isClosing = false;
+
+    /**
+     * Cached promise returned by closeAsync() so that multiple callers all
+     * receive the same promise and unblock together. Nulled after the pool
+     * has fully drained and client-side cleanup has run.
+     *
+     * @var PromiseInterface<void>|null
+     */
+    private ?PromiseInterface $closePromise = null;
+
+    /**
      * Creates a new independent MysqlClient instance.
      *
      * Each instance manages its own connection pool and is completely
@@ -563,7 +578,61 @@ final class MysqlClient implements SqlClientInterface
     }
 
     /**
-     * Closes the client, releasing all pooled connections and resources.
+     * Initiates a graceful shutdown of this client.
+     *
+     * Stops accepting new queries immediately and waits for all in-flight
+     * queries and draining connections to complete before resolving. Idle
+     * connections are closed straight away as they have no pending work.
+     *
+     * Multiple calls return the same promise — all callers unblock together
+     * once the pool is fully drained.
+     *
+     * If close() is called while this promise is pending it will be resolved
+     * before the force teardown runs, so the caller is never left hanging.
+     *
+     * @param float $timeout Maximum seconds to wait before falling back to
+     *                       force close(). 0.0 means no timeout (wait forever).
+     * @return PromiseInterface<void>
+     */
+    public function closeAsync(float $timeout = 0.0): PromiseInterface
+    {
+        // Already force-closed — nothing to drain.
+        if ($this->pool === null) {
+            return Promise::resolved(null);
+        }
+
+        // Already in graceful shutdown — return the same promise so all
+        // callers unblock together when the drain completes.
+        if ($this->closePromise !== null) {
+            return $this->closePromise;
+        }
+
+        $pool = $this->pool;
+
+        $this->closePromise = $pool->closeAsync($timeout)
+            ->then(function (): void {
+                // Guard against close() having already run and nulled the pool
+                // while we were waiting for the drain to complete.
+                if ($this->isClosing) {
+                    return;
+                }
+
+                $this->pool = null;
+                $this->statementCaches = null;
+                $this->closePromise = null;
+            });
+
+        return $this->closePromise;
+    }
+
+    /**
+     * Force-closes the client, immediately terminating all connections and
+     * rejecting all pending work.
+     *
+     * If closeAsync() is pending, its promise is resolved before teardown so
+     * the awaiting caller is not left hanging after this method returns.
+     *
+     * Safe to call from destructors.
      */
     public function close(): void
     {
@@ -571,9 +640,16 @@ final class MysqlClient implements SqlClientInterface
             return;
         }
 
+        // Signal to the closeAsync() cleanup callback that force-close has
+        // already run so it skips nulling pool/statementCaches a second time.
+        $this->isClosing = true;
+
         $this->pool->close();
         $this->pool = null;
         $this->statementCaches = null;
+        $this->closePromise = null;
+
+        $this->isClosing = false;
     }
 
     /**
