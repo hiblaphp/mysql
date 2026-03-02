@@ -6,11 +6,11 @@ namespace Hibla\Mysql\Tests\Handlers;
 
 use Hibla\EventLoop\Loop;
 use Hibla\Mysql\Handlers\ExecuteHandler;
+use Hibla\Mysql\Internals\Connection as MysqlConnection;
 use Hibla\Mysql\Internals\Result;
 use Hibla\Mysql\ValueObjects\StreamContext;
 use Hibla\Mysql\ValueObjects\StreamStats;
 use Hibla\Promise\Promise;
-use Hibla\Socket\Interfaces\ConnectionInterface as SocketConnection;
 use Mockery;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Command\CommandBuilder;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Result\ColumnDefinition;
@@ -18,24 +18,24 @@ use Rcalicdan\MySQLBinaryProtocol\Packet\PayloadReader;
 
 describe('ExecuteHandler', function () {
     it('creates execute handler successfully', function () {
-        $socket = Mockery::mock(SocketConnection::class);
+        $connection = Mockery::mock(MysqlConnection::class);
         $commandBuilder = new CommandBuilder();
 
-        $handler = new ExecuteHandler($socket, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder);
 
         expect($handler)->toBeInstanceOf(ExecuteHandler::class);
     });
 
     it('starts execution and writes packet to socket', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once()->andReturnUsing(function ($packet) {
+        $connection = Mockery::mock(MysqlConnection::class);
+        $connection->shouldReceive('writePacket')->once()->andReturnUsing(function ($packet) {
             expect(strlen($packet))->toBeGreaterThan(0);
 
             return true;
         });
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($socket, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder);
         $promise = new Promise();
 
         $handler->start(1, ['val1'], [], $promise);
@@ -44,11 +44,12 @@ describe('ExecuteHandler', function () {
     });
 
     it('resolves promise with Result on OK packet', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(MysqlConnection::class);
+        $connection->shouldReceive('writePacket')->once();
+        $connection->shouldReceive('getThreadId')->andReturn(1);
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($socket, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder);
         $promise = new Promise();
 
         $handler->start(1, [123], [], $promise);
@@ -75,11 +76,11 @@ describe('ExecuteHandler', function () {
     });
 
     it('rejects promise on ERR packet', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(MysqlConnection::class);
+        $connection->shouldReceive('writePacket')->once();
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($socket, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder);
         $promise = new Promise();
 
         $handler->start(1, [], [], $promise);
@@ -107,8 +108,9 @@ describe('ExecuteHandler', function () {
     });
 
     it('handles binary result set in buffered mode', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(MysqlConnection::class);
+        $connection->shouldReceive('writePacket')->once();
+        $connection->shouldReceive('getThreadId')->andReturn(1);
 
         $colDef = new ColumnDefinition(
             catalog: 'def',
@@ -125,7 +127,7 @@ describe('ExecuteHandler', function () {
         );
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($socket, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder);
         $promise = new Promise();
 
         $handler->start(1, [], [$colDef], $promise);
@@ -134,17 +136,20 @@ describe('ExecuteHandler', function () {
         $headerReader->shouldReceive('readFixedInteger')->with(1)->andReturn(1);
         $headerReader->shouldReceive('readLengthEncodedIntegerOrNull')->andReturn(1);
         $handler->processPacket($headerReader, 1, 0);
-
+        
         $okReader = Mockery::mock(PayloadReader::class);
         $okReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x00);
-        $okReader->shouldReceive('readFixedString')->with(1)->andReturn("\0");
+     
+        $okReader->shouldReceive('readFixedString')->with(1)->andReturn("\0"); // No nulls
+        
+        // Parse Column Value (LONG).
         $okReader->shouldReceive('readFixedInteger')->with(4)->andReturn(100);
+        
         $handler->processPacket($okReader, 6, 1);
 
         $eofReader = Mockery::mock(PayloadReader::class);
         $eofReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0xFE);
-        // The new EOF parsers correctly read the 2-byte warnings and 2-byte status flags!
-        $eofReader->shouldReceive('readFixedInteger')->with(2)->andReturn(0);
+        $eofReader->shouldReceive('readFixedInteger')->with(2)->andReturn(0, 0);
         $handler->processPacket($eofReader, 5, 2);
 
         $result = null;
@@ -161,8 +166,9 @@ describe('ExecuteHandler', function () {
     });
 
     it('handles streaming mode with onRow callback', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(MysqlConnection::class);
+        $connection->shouldReceive('writePacket')->once();
+        $connection->shouldReceive('getThreadId')->andReturn(1);
 
         $colDef = new ColumnDefinition(
             catalog: 'def',
@@ -173,7 +179,7 @@ describe('ExecuteHandler', function () {
             orgName: 'name',
             charset: 33,
             columnLength: 255,
-            type: 253,
+            type: 253, // VAR_CHAR
             flags: 0,
             decimals: 0
         );
@@ -186,7 +192,7 @@ describe('ExecuteHandler', function () {
         );
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($socket, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder);
         $promise = new Promise();
 
         $handler->start(1, [], [$colDef], $promise, $streamContext);
@@ -198,14 +204,14 @@ describe('ExecuteHandler', function () {
 
         $rowReader = Mockery::mock(PayloadReader::class);
         $rowReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x00);
-        $rowReader->shouldReceive('readFixedString')->with(1)->andReturn("\0");
-        $rowReader->shouldReceive('readLengthEncodedStringOrNull')->andReturn('Hibla');
+        $rowReader->shouldReceive('readFixedString')->with(1)->andReturn("\0"); // Null bitmap
+        $rowReader->shouldReceive('readLengthEncodedStringOrNull')->andReturn('Hibla'); // Value
+        
         $handler->processPacket($rowReader, 10, 1);
 
         $eofReader = Mockery::mock(PayloadReader::class);
         $eofReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0xFE);
-        // The new EOF parsers correctly read the 2-byte warnings and 2-byte status flags!
-        $eofReader->shouldReceive('readFixedInteger')->with(2)->andReturn(0);
+        $eofReader->shouldReceive('readFixedInteger')->with(2)->andReturn(0, 0);
         $handler->processPacket($eofReader, 5, 2);
 
         $stats = null;
@@ -222,8 +228,8 @@ describe('ExecuteHandler', function () {
     });
 
     it('triggers onError in streaming mode when parsing fails', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(MysqlConnection::class);
+        $connection->shouldReceive('writePacket')->once();
 
         $errorTriggered = false;
         $streamContext = new StreamContext(
@@ -235,7 +241,7 @@ describe('ExecuteHandler', function () {
         );
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($socket, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder);
         $promise = new Promise();
 
         $promise->catch(function () {

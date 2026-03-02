@@ -6,35 +6,35 @@ namespace Hibla\Mysql\Tests\Handlers;
 
 use Hibla\EventLoop\Loop;
 use Hibla\Mysql\Handlers\QueryHandler;
+use Hibla\Mysql\Internals\Connection;
 use Hibla\Mysql\Internals\Result;
 use Hibla\Mysql\ValueObjects\StreamContext;
 use Hibla\Mysql\ValueObjects\StreamStats;
 use Hibla\Promise\Promise;
-use Hibla\Socket\Interfaces\ConnectionInterface as SocketConnection;
 use Mockery;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Command\CommandBuilder;
 use Rcalicdan\MySQLBinaryProtocol\Packet\PayloadReader;
 
 describe('QueryHandler', function () {
     it('creates query handler successfully', function () {
-        $socket = Mockery::mock(SocketConnection::class);
+        $connection = Mockery::mock(Connection::class);
         $commandBuilder = new CommandBuilder();
 
-        $handler = new QueryHandler($socket, $commandBuilder);
+        $handler = new QueryHandler($connection, $commandBuilder);
 
         expect($handler)->toBeInstanceOf(QueryHandler::class);
     });
 
-    it('executes query and writes packet to socket', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once()->andReturnUsing(function ($packet) {
-            expect(strlen($packet))->toBeGreaterThan(0);
-
-            return true;
+    it('executes query and writes packet to connection', function () {
+        $connection = Mockery::mock(Connection::class);
+        $connection->shouldReceive('writePacket')->once()->andReturnUsing(function ($payload, $seq) {
+            expect(strlen($payload))->toBeGreaterThan(0);
+            expect($seq)->toBe(0);
         });
 
         $commandBuilder = new CommandBuilder();
-        $handler = new QueryHandler($socket, $commandBuilder);
+        $handler = new QueryHandler($connection, $commandBuilder);
+        /** @var Promise<Result> $promise */
         $promise = new Promise();
 
         $handler->start('SELECT 1', $promise);
@@ -43,11 +43,13 @@ describe('QueryHandler', function () {
     });
 
     it('resolves promise with Result on OK packet', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(Connection::class);
+        $connection->shouldReceive('writePacket')->once();
+        $connection->shouldReceive('getThreadId')->andReturn(1);
 
         $commandBuilder = new CommandBuilder();
-        $handler = new QueryHandler($socket, $commandBuilder);
+        $handler = new QueryHandler($connection, $commandBuilder);
+        /** @var Promise<Result> $promise */
         $promise = new Promise();
 
         $handler->start('INSERT INTO test (id) VALUES (1)', $promise);
@@ -69,16 +71,16 @@ describe('QueryHandler', function () {
 
         expect($result)->toBeInstanceOf(Result::class)
             ->and($result->getAffectedRows())->toBe(1)
-            ->and($result->getLastInsertId())->toBe(456)
-        ;
+            ->and($result->getLastInsertId())->toBe(456);
     });
 
     it('rejects promise on ERR packet', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(Connection::class);
+        $connection->shouldReceive('writePacket')->once();
 
         $commandBuilder = new CommandBuilder();
-        $handler = new QueryHandler($socket, $commandBuilder);
+        $handler = new QueryHandler($connection, $commandBuilder);
+        /** @var Promise<Result> $promise */
         $promise = new Promise();
 
         $handler->start('SELECT * FROM non_existent', $promise);
@@ -103,8 +105,9 @@ describe('QueryHandler', function () {
     });
 
     it('handles streaming mode with onRow callback', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(Connection::class);
+        $connection->shouldReceive('writePacket')->once();
+        $connection->shouldReceive('getThreadId')->andReturn(1);
 
         $receivedRows = [];
         $streamContext = new StreamContext(
@@ -114,7 +117,8 @@ describe('QueryHandler', function () {
         );
 
         $commandBuilder = new CommandBuilder();
-        $handler = new QueryHandler($socket, $commandBuilder);
+        $handler = new QueryHandler($connection, $commandBuilder);
+        /** @var Promise<StreamStats> $promise */
         $promise = new Promise();
 
         $handler->start('SELECT name FROM users', $promise, $streamContext);
@@ -134,16 +138,16 @@ describe('QueryHandler', function () {
         $colReader->shouldReceive('readFixedInteger')->with(4)->andReturn(255);
         $handler->processPacket($colReader, 20, 1);
 
-        // INTERMEDIATE EOF PACKET (Ends Column Definitions)
+        // Intermediate EOF Packet (ends column definitions)
         $intermediateEofReader = Mockery::mock(PayloadReader::class);
         $intermediateEofReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0xFE);
         $intermediateEofReader->shouldReceive('readFixedInteger')->with(2)->andReturn(0, 0);
         $handler->processPacket($intermediateEofReader, 5, 2);
 
-        // Row Packet
+        // Row Packet — RowOrEofParser reads first byte then uses readLengthEncodedStringFromByte
         $rowReader = Mockery::mock(PayloadReader::class);
-        $rowReader->shouldReceive('readFixedInteger')->with(1)->andReturn(5);
-        $rowReader->shouldReceive('readFixedString')->with(5)->andReturn('Hibla');
+        $rowReader->shouldReceive('readFixedInteger')->with(1)->andReturn(5); // not 0xFE/0xFF → it's a row (first byte is length 5)
+        $rowReader->shouldReceive('readLengthEncodedStringFromByte')->with(5)->once()->andReturn('Hibla');
         $handler->processPacket($rowReader, 6, 3);
 
         // Final EOF Packet
@@ -165,25 +169,25 @@ describe('QueryHandler', function () {
             ->and($result)->toBeInstanceOf(StreamStats::class)
             ->and($result->rowCount)->toBe(1)
             ->and($receivedRows)->toHaveCount(1)
-            ->and($receivedRows[0]['name'])->toBe('Hibla')
-        ;
+            ->and($receivedRows[0]['name'])->toBe('Hibla');
     });
 
     it('calls onComplete callback in streaming mode', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(Connection::class);
+        $connection->shouldReceive('writePacket')->once();
+        $connection->shouldReceive('getThreadId')->andReturn(1);
 
         $completeCalled = false;
         $streamContext = new StreamContext(
-            onRow: function (array $row) {
-            },
+            onRow: function (array $row) {},
             onComplete: function (StreamStats $stats) use (&$completeCalled) {
                 $completeCalled = true;
             }
         );
 
         $commandBuilder = new CommandBuilder();
-        $handler = new QueryHandler($socket, $commandBuilder);
+        $handler = new QueryHandler($connection, $commandBuilder);
+        /** @var Promise<StreamStats> $promise */
         $promise = new Promise();
 
         $handler->start('SELECT 1', $promise, $streamContext);
@@ -203,13 +207,13 @@ describe('QueryHandler', function () {
         $colReader->shouldReceive('readFixedInteger')->with(4)->andReturn(255);
         $handler->processPacket($colReader, 20, 1);
 
-        // INTERMEDIATE EOF PACKET (Ends Column Definitions)
+        // Intermediate EOF Packet (ends column definitions)
         $intermediateEofReader = Mockery::mock(PayloadReader::class);
         $intermediateEofReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0xFE);
         $intermediateEofReader->shouldReceive('readFixedInteger')->with(2)->andReturn(0, 0);
         $handler->processPacket($intermediateEofReader, 5, 2);
 
-        // Final EOF Packet (Ends empty row set)
+        // Final EOF Packet (ends empty row set)
         $eofReader = Mockery::mock(PayloadReader::class);
         $eofReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0xFE);
         $eofReader->shouldReceive('readFixedInteger')->with(2)->andReturn(0, 0);
@@ -221,23 +225,22 @@ describe('QueryHandler', function () {
     });
 
     it('calls onError callback when exception occurs in streaming mode', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(Connection::class);
+        $connection->shouldReceive('writePacket')->once();
 
         $errorCalled = false;
         $streamContext = new StreamContext(
-            onRow: function (array $row) {
-            },
+            onRow: function (array $row) {},
             onError: function (\Throwable $e) use (&$errorCalled) {
                 $errorCalled = true;
             }
         );
 
         $commandBuilder = new CommandBuilder();
-        $handler = new QueryHandler($socket, $commandBuilder);
+        $handler = new QueryHandler($connection, $commandBuilder);
+        /** @var Promise<StreamStats> $promise */
         $promise = new Promise();
-        $promise->catch(function () {
-        });
+        $promise->catch(function () {});
 
         $handler->start('SELECT 1', $promise, $streamContext);
 
@@ -257,11 +260,13 @@ describe('QueryHandler', function () {
     });
 
     it('handles multiple rows in buffered mode', function () {
-        $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
+        $connection = Mockery::mock(Connection::class);
+        $connection->shouldReceive('writePacket')->once();
+        $connection->shouldReceive('getThreadId')->andReturn(1);
 
         $commandBuilder = new CommandBuilder();
-        $handler = new QueryHandler($socket, $commandBuilder);
+        $handler = new QueryHandler($connection, $commandBuilder);
+        /** @var Promise<Result> $promise */
         $promise = new Promise();
 
         $handler->start('SELECT id FROM users', $promise);
@@ -281,7 +286,7 @@ describe('QueryHandler', function () {
         $colReader->shouldReceive('readFixedInteger')->with(4)->andReturn(11);
         $handler->processPacket($colReader, 20, 1);
 
-        // INTERMEDIATE EOF PACKET
+        // Intermediate EOF Packet
         $intermediateEofReader = Mockery::mock(PayloadReader::class);
         $intermediateEofReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0xFE);
         $intermediateEofReader->shouldReceive('readFixedInteger')->with(2)->andReturn(0, 0);
@@ -290,13 +295,13 @@ describe('QueryHandler', function () {
         // Row 1
         $rowReader1 = Mockery::mock(PayloadReader::class);
         $rowReader1->shouldReceive('readFixedInteger')->with(1)->andReturn(1);
-        $rowReader1->shouldReceive('readFixedString')->with(1)->andReturn('1');
+        $rowReader1->shouldReceive('readLengthEncodedStringFromByte')->with(1)->andReturn('1');
         $handler->processPacket($rowReader1, 2, 3);
 
         // Row 2
         $rowReader2 = Mockery::mock(PayloadReader::class);
         $rowReader2->shouldReceive('readFixedInteger')->with(1)->andReturn(1);
-        $rowReader2->shouldReceive('readFixedString')->with(1)->andReturn('2');
+        $rowReader2->shouldReceive('readLengthEncodedStringFromByte')->with(1)->andReturn('2');
         $handler->processPacket($rowReader2, 2, 4);
 
         // Final EOF Packet
@@ -314,7 +319,6 @@ describe('QueryHandler', function () {
 
         expect($result)->toBeInstanceOf(Result::class)
             ->and($result->rowCount())->toBe(2)
-            ->and($result->fetchAll())->toBe([['id' => '1'], ['id' => '2']])
-        ;
+            ->and($result->fetchAll())->toBe([['id' => '1'], ['id' => '2']]);
     });
 });
