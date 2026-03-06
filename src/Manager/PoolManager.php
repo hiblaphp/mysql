@@ -898,6 +898,10 @@ class PoolManager
         // ALWAYS try to serve existing waiters first, even during shutdown!
         $waiter = $this->dequeueActiveWaiter();
 
+        if ($this->waiters->isEmpty()) {
+            $this->waiters = new SplQueue();
+        }
+
         if ($waiter !== null) {
             $connection->resume();
             $waiter->resolve($connection);

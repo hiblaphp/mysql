@@ -63,6 +63,8 @@ class Connection
 
     private ConnectionState $state = ConnectionState::DISCONNECTED;
 
+    private readonly PacketFramer $packetFramer;
+
     private ?SocketConnection $socket = null;
 
     private ?PacketReader $packetReader = null;
@@ -144,6 +146,8 @@ class Connection
             \is_string($config) => MysqlConfig::fromUri($config),
         };
 
+        $this->packetFramer = new PacketFramer();
+
         /** @var SplQueue<CommandRequest> $queue */
         $queue = new SplQueue();
         $this->commandQueue = $queue;
@@ -214,27 +218,9 @@ class Connection
             throw new ConnectionException('Cannot write packet: Connection not initialized.');
         }
 
-        $MAX_PACKET_SIZE = 16777215; // 16MB - 1 byte
-        $length = \strlen($payload);
-        $offset = 0;
-
-        // If payload is larger than 16MB, split it
-        while ($length >= $MAX_PACKET_SIZE) {
-            $chunk = substr($payload, $offset, $MAX_PACKET_SIZE);
-            $packet = $this->packetWriter->write($chunk, $sequenceId);
-
+        foreach ($this->packetFramer->frame($payload, $this->packetWriter, $sequenceId) as $packet) {
             $this->socket->write($packet);
-
-            $sequenceId++;
-            $length -= $MAX_PACKET_SIZE;
-            $offset += $MAX_PACKET_SIZE;
         }
-
-        $chunk = substr($payload, $offset);
-        $packet = $this->packetWriter->write($chunk, $sequenceId);
-
-        $this->socket->write($packet);
-        $sequenceId++;
     }
 
     /**

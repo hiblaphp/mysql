@@ -13,7 +13,6 @@ use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use Hibla\Sql\Exceptions\PreparedException;
 use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
-use Hibla\Stream\Traits\PromiseHelperTrait;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Result\ColumnDefinition;
 
 /**
@@ -23,8 +22,6 @@ use Rcalicdan\MySQLBinaryProtocol\Frame\Result\ColumnDefinition;
  */
 class PreparedStatement implements PreparedStatementInterface
 {
-    use PromiseHelperTrait;
-
     private bool $isClosed = false;
 
     /**
@@ -128,9 +125,7 @@ class PreparedStatement implements PreparedStatementInterface
             $stream->error(...)
         );
 
-        $outerPromise->onCancel(function () use ($stream): void {
-            $stream->cancel();
-        });
+        $outerPromise->onCancel($stream->cancel(...));
 
         return $outerPromise;
     }
@@ -143,7 +138,7 @@ class PreparedStatement implements PreparedStatementInterface
     public function close(): PromiseInterface
     {
         if ($this->isClosed) {
-            return $this->createResolvedVoidPromise();
+            Promise::resolved();
         }
 
         $this->isClosed = true;
