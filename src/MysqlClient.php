@@ -361,6 +361,25 @@ final class MysqlClient implements SqlClientInterface
      * @param string $sql SQL query to stream.
      * @param array<int|string, mixed> $params Query parameters (optional).
      * @param int $bufferSize Maximum rows to buffer before applying backpressure.
+     *                        Larger values increase memory usage but reduce socket
+     *                        pause/resume cycling for high-throughput workloads.
+     *
+     * IMPORTANT: When consuming the returned stream concurrently alongside other
+     * async work, the foreach loop must run inside async():
+     *
+     * ```php
+     *   await(async(function () use ($client) {
+     *       $stream = await($client->stream($sql));
+     *       foreach ($stream as $row) { ... }
+     *   }));
+     * ```
+     *
+     * Outside an async() context, await() inside the iterator falls back to
+     * blocking mode on every empty buffer, freezing the event loop until the
+     * next batch of rows arrives. In a script with no concurrent work this is
+     * harmless. In a concurrent application it will stall all other fibers,
+     * timers, and I/O for the duration of the stream.
+     *
      * @return PromiseInterface<MysqlRowStream>
      */
     public function stream(string $sql, array $params = [], int $bufferSize = 100): PromiseInterface
