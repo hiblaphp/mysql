@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Hibla\Mysql\Internals;
 
-use function Hibla\async;
-use function Hibla\await;
-
+use Hibla\EventLoop\Loop;
 use Hibla\Mysql\Enums\ConnectionState;
 use Hibla\Mysql\Handlers\ExecuteHandler;
 use Hibla\Mysql\Handlers\HandshakeHandler;
@@ -30,6 +28,7 @@ use LogicException;
 use Rcalicdan\MySQLBinaryProtocol\Factory\DefaultPacketReaderFactory;
 use Rcalicdan\MySQLBinaryProtocol\Factory\DefaultPacketWriterFactory;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Command\CommandBuilder;
+use Rcalicdan\MySQLBinaryProtocol\Packet\PacketFramer;
 use Rcalicdan\MySQLBinaryProtocol\Packet\PacketReader;
 use Rcalicdan\MySQLBinaryProtocol\Packet\PacketWriter;
 use Rcalicdan\MySQLBinaryProtocol\Packet\PayloadReader;
@@ -627,18 +626,24 @@ class Connection
      *      first promise.
      *
      *   2. SYNCHRONOUS REGISTRATION — $killPromise is created and stored in
-     *      $pendingKills BEFORE async() schedules the fiber. This closes the
-     *      tick-boundary race where close() runs in the same tick as
-     *      dispatchKillQuery() but before the fiber has executed, making
+     *      $pendingKills BEFORE nextTick() schedules the kill work. This closes
+     *      the tick-boundary race where close() runs in the same tick as
+     *      dispatchKillQuery() but before the callback has executed, making
      *      pendingKills appear empty to close().
      *
-     *   3. BOUNDED — the kill work is wrapped in KILL_TIMEOUT_SECONDS so a
+     *   3. BOUNDED — the kill work is wrapped in killTimeoutSeconds so a
      *      slow or unreachable side-channel never blocks teardown forever.
      *
-     *   4. SAFE AFTER TEARDOWN — the fiber captures only $this->params and
+     *   4. SAFE AFTER TEARDOWN — the callback captures only $this->params and
      *      $this->connector, both of which are readonly and never nulled by
-     *      teardown(). The fiber therefore remains safe to execute even if
+     *      teardown(). The callback therefore remains safe to execute even if
      *      teardown() has already run on the parent connection.
+     *
+     *   5. NON-BLOCKING — nextTick() defers execution to the next event loop
+     *      tick, preventing the current call stack (especially destructors or
+     *      close()) from blocking while the side-channel connects and queries.
+     *      Unlike async()/await(), no fiber is spun up for what is a simple
+     *      three-step promise chain (connect → query → close).
      */
     private function dispatchKillQuery(int $threadId): void
     {
@@ -650,48 +655,29 @@ class Connection
         }
 
         // Registered synchronously so close() always sees a non-empty
-        // pendingKills map regardless of when it runs relative to the fiber.
+        // pendingKills map regardless of when it runs relative to the callback.
         /** @var Promise<mixed> $killPromise */
         $killPromise = new Promise();
         $this->pendingKills[$threadId] = $killPromise;
 
-        // Executes in a detached fiber (via async) to:
-        //   1. Prevent blocking the current call stack (especially destructors
-        //      or close).
-        //   2. Root the Promise chain in the Event Loop so PHP's GC doesn't
-        //      destroy it prematurely when the parent method returns.
-        try {
-            async(function () use ($threadId, $killPromise): void {
-                try {
-                    $timedKill = Promise::timeout(
-                        Promise::resolved(null)->then(function () use ($threadId) {
-                            return Connection::create($this->params, $this->connector)
-                                ->then(function ($killConn) use ($threadId) {
-                                    return $killConn->query("KILL QUERY {$threadId}")
-                                        ->finally(function () use ($killConn) {
-                                            $killConn->close();
-                                        })
-                                    ;
-                                })
-                            ;
-                        }),
-                        $this->params->killTimeoutSeconds
-                    );
+        Loop::nextTick(function () use ($threadId, $killPromise): void {
+            // Both resolve and reject paths must settle $killPromise and clean up
+            // the pendingKills entry — allSettled() in awaitPendingKills() depends
+            // on every entry eventually reaching a terminal state.
+            $settle = function () use ($killPromise, $threadId): void {
+                $killPromise->resolve(null);
+                unset($this->pendingKills[$threadId]);
+            };
 
-                    await($timedKill);
-                    $killPromise->resolve(null);
-                } catch (Throwable) {
-                    $killPromise->resolve(null);
-                } finally {
-                    unset($this->pendingKills[$threadId]);
-                }
-            });
-        } catch (Throwable $e) {
-            // If async() throws synchronously (e.g., event loop is dead during PHP shutdown),
-            // safely discard the kill attempt so it don't crash the destructor.
-            unset($this->pendingKills[$threadId]);
-            $killPromise->resolve(null);
-        }
+            Promise::timeout(
+                Connection::create($this->params, $this->connector)
+                    ->then(function (Connection $killConn) use ($threadId): PromiseInterface {
+                        return $killConn->query("KILL QUERY {$threadId}")
+                            ->finally(fn() => $killConn->close());
+                    }),
+                $this->params->killTimeoutSeconds
+            )->then($settle, $settle);
+        });
     }
 
     /**

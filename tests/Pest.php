@@ -25,7 +25,7 @@ function createMysqlConfig(bool $ssl = false): MysqlConfig
 {
     return new MysqlConfig(
         host: 'localhost',
-        port: 3306,
+        port: 3310,
         username: 'testuser',
         password: 'testpass',
         database: 'testdb',
@@ -97,7 +97,7 @@ function testMysqlConfig(bool $enableServerSideCancellation = false): MysqlConfi
 {
     return MysqlConfig::fromArray([
         'host' => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
-        'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3306),
+        'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3310),
         'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
         'username' => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
         'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
@@ -169,7 +169,7 @@ function makeCompressedClient(
 ): MysqlClient {
     $params = MysqlConfig::fromArray([
         'host' => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
-        'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3306),
+        'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3310),
         'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
         'username' => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
         'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
@@ -220,7 +220,7 @@ function makeResettableConnection(): Connection
 {
     $params = MysqlConfig::fromArray([
         'host' => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
-        'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3306),
+        'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3310),
         'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
         'username' => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
         'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
@@ -245,7 +245,7 @@ function makeResetClient(int $maxConnections = 1): MysqlClient
     return new MysqlClient(
         config: [
             'host' => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
-            'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3306),
+            'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3310),
             'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
             'username' => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
             'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
@@ -279,7 +279,7 @@ function makeMultiStatementClient(int $maxConnections = 5): MysqlClient
     return new MysqlClient(
         config: [
             'host' => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
-            'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3306),
+            'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3310),
             'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
             'username' => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
             'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
@@ -297,7 +297,7 @@ function makeOnConnectClient(
     return new MysqlClient(
         config: [
             'host'                           => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
-            'port'                           => (int) ($_ENV['MYSQL_PORT'] ?? 3306),
+            'port'                           => (int) ($_ENV['MYSQL_PORT'] ?? 3310),
             'database'                       => $_ENV['MYSQL_DATABASE'] ?? 'test',
             'username'                       => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
             'password'                       => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
