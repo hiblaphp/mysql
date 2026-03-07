@@ -136,34 +136,44 @@ describe('Real SSL/TLS Connection', function (): void {
         $conn->close();
     });
 
-    // it('handles large packets (>16MB) over SSL', function (): void {
-    //     $config = MysqlConfig::fromArray([
-    //         'host' => $_ENV['MYSQL_SSL_HOST'] ?? '127.0.0.1',
-    //         'port' => (int) ($_ENV['MYSQL_SSL_PORT'] ?? 3307),
-    //         'database' => $_ENV['MYSQL_SSL_DATABASE'] ?? 'test',
-    //         'username' => $_ENV['MYSQL_SSL_USERNAME'] ?? 'test_user',
-    //         'password' => $_ENV['MYSQL_SSL_PASSWORD'] ?? 'test_password',
-    //         'ssl' => true,
-    //         'ssl_verify' => false,
-    //     ]);
+    it('handles large packets (>16MB) over SSL', function (): void {
 
-    //     $conn = await(Connection::create($config));
+        $fixtureDir = __DIR__ . '/../Fixtures/ssl';
 
-    //     await($conn->query("CREATE TEMPORARY TABLE IF NOT EXISTS test_large_packet (data LONGBLOB)"));
+        $caPath   = realpath($fixtureDir . '/ca.pem');
+        $certPath = realpath($fixtureDir . '/client-cert.pem');
+        $keyPath  = realpath($fixtureDir . '/client-key.pem');
+        
+        $config = MysqlConfig::fromArray([
+            'host' => $_ENV['MYSQL_SSL_HOST'] ?? '127.0.0.1',
+            'port' => (int) ($_ENV['MYSQL_SSL_PORT'] ?? 3307),
+            'database' => $_ENV['MYSQL_SSL_DATABASE'] ?? 'test',
+            'username' => $_ENV['MYSQL_SSL_USERNAME'] ?? 'test_user',
+            'password' => $_ENV['MYSQL_SSL_PASSWORD'] ?? 'test_password',
+            'ssl' => true,
+            'ssl_verify' => true,
+            'ssl_ca' => $caPath,
+            'ssl_cert' => $certPath,
+            'ssl_key' => $keyPath,
+        ]);
 
-    //     $size = 17 * 1024 * 1024;
+        $conn = await(Connection::create($config));
 
-    //     $largeString = str_repeat('A', $size);
+        await($conn->query("CREATE TEMPORARY TABLE IF NOT EXISTS test_large_packet (data LONGBLOB)"));
 
-    //     $stmt = await($conn->prepare("INSERT INTO test_large_packet (data) VALUES (?)"));
-    //     await($stmt->execute([$largeString]));
+        $size = 17 * 1024 * 1024;
 
-    //     $result = await($conn->query("SELECT data FROM test_large_packet"));
-    //     $row = $result->fetchOne();
+        $largeString = str_repeat('A', $size);
 
-    //     expect(strlen($row['data']))->toBe($size)
-    //         ->and(md5($row['data']))->toBe(md5($largeString));
+        $stmt = await($conn->prepare("INSERT INTO test_large_packet (data) VALUES (?)"));
+        await($stmt->execute([$largeString]));
 
-    //     $conn->close();
-    // });
+        $result = await($conn->query("SELECT data FROM test_large_packet"));
+        $row = $result->fetchOne();
+
+        expect(strlen($row['data']))->toBe($size)
+            ->and(md5($row['data']))->toBe(md5($largeString));
+
+        $conn->close();
+    });
 })->skipOnWindows();

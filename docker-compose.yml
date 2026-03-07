@@ -13,3 +13,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  mysql_ssl:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: test
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./tests/Fixtures/ssl/ca.pem:/etc/mysql/ssl/ca.pem:ro
+      - ./tests/Fixtures/ssl/server-cert.pem:/etc/mysql/ssl/server-cert.pem:ro
+      - ./tests/Fixtures/ssl/server-key.pem:/etc/mysql/ssl/server-key.pem:ro
+    command: >
+      --require_secure_transport=ON
+      --ssl_ca=/etc/mysql/ssl/ca.pem
+      --ssl_cert=/etc/mysql/ssl/server-cert.pem
+      --ssl_key=/etc/mysql/ssl/server-key.pem
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
