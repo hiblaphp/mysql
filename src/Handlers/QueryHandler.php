@@ -85,7 +85,9 @@ final class QueryHandler
     }
 
     /**
+     * @param string $sql
      * @param Promise<Result|StreamStats> $promise
+     * @param StreamContext|null $streamContext
      */
     public function start(string $sql, Promise $promise, ?StreamContext $streamContext = null): void
     {
@@ -311,11 +313,22 @@ final class QueryHandler
     {
         if ($this->streamContext !== null) {
             $duration = ((float)hrtime(true) - $this->streamStartTime) / 1e9;
-            $stats = new StreamStats($this->streamedRowCount, \count($this->columns), $duration, $packet->warnings, $this->connection->getThreadId());
+            $stats = new StreamStats(
+                rowCount: $this->streamedRowCount,
+                columnCount: \count($this->columns),
+                duration: $duration,
+                warningCount: $packet->warnings,
+                connectionId: $this->connection->getThreadId()
+            );
             $currentResult = null;
             $currentStats = $stats;
         } else {
-            $result = new Result($this->rows, 0, 0, $packet->warnings, $this->columns, $this->connection->getThreadId());
+            $result = new Result(
+                rows: $this->rows,
+                warningCount: $packet->warnings,
+                columnDefinitions: $this->columns,
+                connectionId: $this->connection->getThreadId()
+            );
             $currentResult = $result;
             $currentStats = null;
         }
@@ -411,6 +424,11 @@ final class QueryHandler
         }
     }
 
+    /**
+     * @param int $errorCode
+     * @param string $message
+     * @return \Throwable
+     */
     private function createExceptionFromError(int $errorCode, string $message): \Throwable
     {
         if ($errorCode === 1213) {

@@ -52,6 +52,7 @@ final class PrepareHandler
     }
 
     /**
+     * @param string $sql
      * @param Promise<PreparedStatement> $promise
      */
     public function start(string $sql, Promise $promise): void
@@ -175,12 +176,12 @@ final class PrepareHandler
     private function finish(): void
     {
         $stmt = new PreparedStatement(
-            $this->connection,
-            $this->stmtId,
-            $this->numColumns,
-            $this->numParams,
-            $this->columnDefinitions,
-            $this->paramDefinitions
+            connection: $this->connection,
+            id: $this->stmtId,
+            numColumns: $this->numColumns,
+            numParams: $this->numParams,
+            columnDefinitions: $this->columnDefinitions,
+            paramDefinitions: $this->paramDefinitions
         );
 
         $this->currentPromise?->resolve($stmt);
