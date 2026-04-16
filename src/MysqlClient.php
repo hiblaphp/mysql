@@ -14,6 +14,7 @@ use Hibla\Mysql\Internals\ManagedPreparedStatement;
 use Hibla\Mysql\Internals\PreparedStatement;
 use Hibla\Mysql\Internals\Transaction;
 use Hibla\Mysql\Manager\PoolManager;
+use Hibla\Mysql\Traits\CancellationHelperTrait;
 use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
@@ -60,6 +61,8 @@ use function Hibla\await;
  */
 final class MysqlClient implements SqlClientInterface
 {
+    use CancellationHelperTrait;
+
     /**
      * Statistics about the connection pool.
      *
@@ -73,7 +76,8 @@ final class MysqlClient implements SqlClientInterface
             $clientStats = [];
 
             foreach ($stats as $key => $val) {
-                if (\is_bool($val) || \is_int($val)) {
+                // Explicitly check for string to satisfy PHPStan generic array requirements
+                if (\is_string($key) && (\is_bool($val) || \is_int($val))) {
                     $clientStats[$key] = $val;
                 }
             }
@@ -233,26 +237,32 @@ final class MysqlClient implements SqlClientInterface
     {
         $pool = $this->getPool();
         $connection = null;
+        $innerPromise = null;
 
-        return $this->withCancellation(
-            $this->borrowConnection()
-                ->then(function (Connection $conn) use ($sql, $pool, &$connection) {
-                    $connection = $conn;
+        $promise = $this->borrowConnection()
+            ->then(function (Connection $conn) use ($sql, $pool, &$connection, &$innerPromise) {
+                $connection = $conn;
 
-                    return $conn->prepare($sql)
-                        ->then(function (PreparedStatement $stmt) use ($conn, $pool) {
-                            return new ManagedPreparedStatement($stmt, $conn, $pool);
-                        })
-                    ;
-                })
-                ->catch(function (\Throwable $e) use ($pool, &$connection) {
-                    if ($connection !== null) {
-                        $pool->release($connection);
-                    }
+                $innerPromise = $conn->prepare($sql)
+                    ->then(function (PreparedStatement $stmt) use ($conn, $pool) {
+                        return new ManagedPreparedStatement($stmt, $conn, $pool);
+                    })
+                ;
 
-                    throw $e;
-                })
-        );
+                return $innerPromise;
+            })
+            ->catch(function (\Throwable $e) use ($pool, &$connection) {
+                if ($connection !== null) {
+                    $pool->release($connection);
+                }
+
+                throw $e;
+            })
+        ;
+
+        $this->bindInnerCancellation($promise, $innerPromise);
+
+        return $this->withCancellation($promise);
     }
 
     /**
@@ -270,46 +280,50 @@ final class MysqlClient implements SqlClientInterface
     {
         $pool = $this->getPool();
         $connection = null;
+        $innerPromise = null;
 
-        return $this->withCancellation(
-            $this->borrowConnection()
-                ->then(function (Connection $conn) use ($sql, $params, &$connection) {
-                    $connection = $conn;
+        $promise = $this->borrowConnection()
+            ->then(function (Connection $conn) use ($sql, $params, &$connection, &$innerPromise) {
+                $connection = $conn;
 
-                    if (\count($params) === 0) {
-                        return $conn->query($sql);
-                    }
+                if (\count($params) === 0) {
+                    $innerPromise = $conn->query($sql);
 
-                    if ($this->enableStatementCache) {
-                        return $this->getCachedStatement($conn, $sql)
-                            ->then(function (PreparedStatement $stmt) use ($params) {
-                                return $stmt->execute(array_values($params));
-                            })
-                        ;
-                    }
+                    return $innerPromise;
+                }
 
-                    /** @var PreparedStatement|null $stmtRef */
-                    $stmtRef = null;
-
-                    return $conn->prepare($sql)
-                        ->then(function (PreparedStatement $stmt) use ($params, &$stmtRef) {
-                            $stmtRef = $stmt;
-
+                if ($this->enableStatementCache) {
+                    $innerPromise = $this->getCachedStatement($conn, $sql)
+                        ->then(function (PreparedStatement $stmt) use ($params) {
                             return $stmt->execute(array_values($params));
                         })
-                        ->finally(function () use (&$stmtRef): void {
-                            if ($stmtRef !== null) {
-                                $stmtRef->close();
-                            }
-                        })
                     ;
-                })
-                ->finally(function () use ($pool, &$connection): void {
-                    if ($connection !== null) {
-                        $pool->release($connection);
-                    }
-                })
-        );
+
+                    return $innerPromise;
+                }
+
+                $innerPromise = $conn->prepare($sql)
+                    ->then(function (PreparedStatement $stmt) use ($params) {
+                        return $stmt->execute(array_values($params))
+                            ->finally(function () use ($stmt): void {
+                                $stmt->close();
+                            })
+                        ;
+                    })
+                ;
+
+                return $innerPromise;
+            })
+            ->finally(function () use ($pool, &$connection): void {
+                if ($connection !== null) {
+                    $pool->release($connection);
+                }
+            })
+        ;
+
+        $this->bindInnerCancellation($promise, $innerPromise);
+
+        return $this->withCancellation($promise);
     }
 
     /**
@@ -424,6 +438,7 @@ final class MysqlClient implements SqlClientInterface
     public function stream(string $sql, array $params = [], int $bufferSize = 100): PromiseInterface
     {
         $pool = $this->getPool();
+        $innerPromise = null;
 
         $state = new class () {
             public ?Connection $connection = null;
@@ -439,56 +454,59 @@ final class MysqlClient implements SqlClientInterface
             $pool->release($state->connection);
         };
 
-        return $this->withCancellation(
-            $this->borrowConnection()
-                ->then(function (Connection $conn) use ($sql, $params, $bufferSize, $pool, $state) {
-                    $state->connection = $conn;
+        $promise = $this->borrowConnection()
+            ->then(function (Connection $conn) use ($sql, $params, $bufferSize, $pool, $state, &$innerPromise) {
+                $state->connection = $conn;
 
-                    if (\count($params) === 0) {
-                        $innerStreamPromise = $conn->streamQuery($sql, $bufferSize);
-                    } else {
-                        $innerStreamPromise = $this->getCachedStatement($conn, $sql)
-                            ->then(function (PreparedStatement $stmt) use ($params, $bufferSize) {
-                                return $stmt->executeStream(array_values($params), $bufferSize);
-                            })
-                        ;
+                if (\count($params) === 0) {
+                    $innerPromise = $conn->streamQuery($sql, $bufferSize);
+                } else {
+                    $innerPromise = $this->getCachedStatement($conn, $sql)
+                        ->then(function (PreparedStatement $stmt) use ($params, $bufferSize) {
+                            return $stmt->executeStream(array_values($params), $bufferSize);
+                        })
+                    ;
+                }
+
+                $query = $innerPromise->then(
+                    function (MysqlRowStream $stream) use ($conn, $pool, $state): MysqlRowStream {
+                        if ($stream instanceof Internals\RowStream) {
+                            $state->released = true;
+
+                            $stream->waitForCommand()->finally(function () use ($pool, $conn): void {
+                                $pool->release($conn);
+                            });
+                        } else {
+                            $state->released = true;
+                            $pool->release($conn);
+                        }
+
+                        return $stream;
+                    },
+                    function (\Throwable $e) use ($conn, $pool, $state): never {
+                        if (! $state->released) {
+                            $state->released = true;
+                            $pool->release($conn);
+                        }
+
+                        throw $e;
                     }
+                );
 
-                    $query = $innerStreamPromise->then(
-                        function (MysqlRowStream $stream) use ($conn, $pool, $state): MysqlRowStream {
-                            if ($stream instanceof Internals\RowStream) {
-                                $state->released = true;
+                $query->onCancel(static function () use (&$innerPromise): void {
+                    if (! $innerPromise->isSettled()) {
+                        $innerPromise->cancelChain();
+                    }
+                });
 
-                                $stream->waitForCommand()->finally(function () use ($pool, $conn): void {
-                                    $pool->release($conn);
-                                });
-                            } else {
-                                $state->released = true;
-                                $pool->release($conn);
-                            }
+                return $query;
+            })
+            ->finally($releaseOnce)
+        ;
 
-                            return $stream;
-                        },
-                        function (\Throwable $e) use ($conn, $pool, $state): never {
-                            if (! $state->released) {
-                                $state->released = true;
-                                $pool->release($conn);
-                            }
+        $this->bindInnerCancellation($promise, $innerPromise);
 
-                            throw $e;
-                        }
-                    );
-
-                    $query->onCancel(static function () use ($innerStreamPromise): void {
-                        if (! $innerStreamPromise->isSettled()) {
-                            $innerStreamPromise->cancelChain();
-                        }
-                    });
-
-                    return $query;
-                })
-                ->finally($releaseOnce)
-        );
+        return $this->withCancellation($promise);
     }
 
     /**
@@ -705,32 +723,6 @@ final class MysqlClient implements SqlClientInterface
 
             return $conn;
         });
-    }
-
-    /**
-     * Bridges cancel() → cancelChain() on a public-facing promise.
-     *
-     * Public methods return the LEAF of a promise chain. When a user calls
-     * cancel() on that leaf, it only cancels that node and its children —
-     * it never reaches the ROOT where the real onCancel handler (KILL QUERY,
-     * connection release) lives.
-     *
-     * This bridge registers an onCancel hook so that cancel() on the leaf
-     * immediately walks up to the root via cancelChain(), triggering all
-     * cleanup handlers correctly — including KILL QUERY dispatch in Connection
-     * and connection release back to the pool.
-     *
-     * @template T
-     *
-     * @param PromiseInterface<T> $promise
-     *
-     * @return PromiseInterface<T>
-     */
-    private function withCancellation(PromiseInterface $promise): PromiseInterface
-    {
-        $promise->onCancel($promise->cancelChain(...));
-
-        return $promise;
     }
 
     /**

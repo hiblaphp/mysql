@@ -427,6 +427,7 @@ final class QueryHandler
     /**
      * @param int $errorCode
      * @param string $message
+     *
      * @return \Throwable
      */
     private function createExceptionFromError(int $errorCode, string $message): \Throwable

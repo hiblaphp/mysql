@@ -11,7 +11,7 @@
     },
     "require": {
         "rcalicdan/mysql-binary-protocol": "dev-main",
-        "hiblaphp/event-loop": "1.0-alpha.2",
+        "hiblaphp/event-loop": "^1.0",
         "hiblaphp/promise": "^1.0",
         "hiblaphp/stream": "^1.0",
         "hiblaphp/socket": "^1.0",

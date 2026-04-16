@@ -285,7 +285,7 @@ class PoolManager
     /**
      * Retrieves statistics about the current state of the connection pool.
      *
-     * @return array<string, mixed> An associative array with pool metrics.
+     * @var array<string, bool|float|int> An associative array with pool metrics.
      */
     public array $stats {
         get {

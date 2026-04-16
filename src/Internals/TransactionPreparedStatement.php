@@ -6,6 +6,7 @@ namespace Hibla\Mysql\Internals;
 
 use Hibla\Mysql\Interfaces\MysqlResult;
 use Hibla\Mysql\Interfaces\MysqlRowStream;
+use Hibla\Mysql\Traits\CancellationHelperTrait;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
@@ -24,6 +25,8 @@ use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
  */
 class TransactionPreparedStatement implements PreparedStatementInterface
 {
+    use CancellationHelperTrait;
+
     private bool $isClosed = false;
 
     public function __construct(
@@ -73,22 +76,6 @@ class TransactionPreparedStatement implements PreparedStatementInterface
         $this->isClosed = true;
 
         return $this->statement->close();
-    }
-
-    /**
-     * Bridges cancel() → cancelChain() on a public-facing promise.
-     *
-     * @template T
-     *
-     * @param PromiseInterface<T> $promise
-     *
-     * @return PromiseInterface<T>
-     */
-    private function withCancellation(PromiseInterface $promise): PromiseInterface
-    {
-        $promise->onCancel($promise->cancelChain(...));
-
-        return $promise;
     }
 
     /**

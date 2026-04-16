@@ -7,6 +7,7 @@ namespace Hibla\Mysql\Internals;
 use Hibla\Mysql\Interfaces\MysqlResult;
 use Hibla\Mysql\Interfaces\MysqlRowStream;
 use Hibla\Mysql\Manager\PoolManager;
+use Hibla\Mysql\Traits\CancellationHelperTrait;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Sql\Exceptions\PreparedException;
 use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
@@ -21,6 +22,8 @@ use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
  */
 class ManagedPreparedStatement implements PreparedStatementInterface
 {
+    use CancellationHelperTrait;
+
     private bool $isReleased = false;
 
     /**
@@ -86,31 +89,6 @@ class ManagedPreparedStatement implements PreparedStatementInterface
         return $this->statement->close()
             ->finally($this->releaseConnection(...))
         ;
-    }
-
-    /**
-     * Bridges cancel() → cancelChain() on a public-facing promise.
-     *
-     * execute() and executeStream() return the LEAF of an internal promise
-     * chain. Calling cancel() on the leaf only cancels that node — it never
-     * reaches the ROOT where the real onCancel handler (KILL QUERY dispatch)
-     * lives in Connection.
-     *
-     * This bridge registers an onCancel hook so that cancel() on the leaf
-     * immediately walks up to the root via cancelChain(), correctly triggering
-     * KILL QUERY on the server.
-     *
-     * @template T
-     *
-     * @param PromiseInterface<T> $promise
-     *
-     * @return PromiseInterface<T>
-     */
-    private function withCancellation(PromiseInterface $promise): PromiseInterface
-    {
-        $promise->onCancel($promise->cancelChain(...));
-
-        return $promise;
     }
 
     /**

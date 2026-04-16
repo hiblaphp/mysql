@@ -8,6 +8,7 @@ use Hibla\Cache\ArrayCache;
 use Hibla\Mysql\Interfaces\MysqlResult;
 use Hibla\Mysql\Interfaces\MysqlRowStream;
 use Hibla\Mysql\Manager\PoolManager;
+use Hibla\Mysql\Traits\CancellationHelperTrait;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use Hibla\Sql\Exceptions\TransactionException;
@@ -22,6 +23,8 @@ use Hibla\Sql\Transaction as TransactionInterface;
  */
 class Transaction implements TransactionInterface
 {
+    use CancellationHelperTrait;
+
     /**
      * @var list<callable(): void>
      */
@@ -67,22 +70,30 @@ class Transaction implements TransactionInterface
 
         if (\count($params) === 0) {
             $promise = $this->connection->query($sql);
-        } else {
-            $promise = $this->getCachedStatement($sql)
-                ->then(function (array $result) use ($params) {
-                    /** @var PreparedStatement $stmt */
-                    [$stmt, $isCached] = $result;
 
-                    return $stmt->execute($params)
-                        ->finally(function () use ($stmt, $isCached) {
-                            if (! $isCached) {
-                                $stmt->close();
-                            }
-                        })
-                    ;
-                })
-            ;
+            return $this->withCancellation($this->trackErrorState($promise));
         }
+
+        $innerPromise = null;
+
+        $promise = $this->getCachedStatement($sql)
+            ->then(function (array $result) use ($params, &$innerPromise) {
+                /** @var PreparedStatement $stmt */
+                [$stmt, $isCached] = $result;
+
+                $innerPromise = $stmt->execute($params)
+                    ->finally(function () use ($stmt, $isCached) {
+                        if (! $isCached) {
+                            $stmt->close();
+                        }
+                    })
+                ;
+
+                return $innerPromise;
+            })
+        ;
+
+        $this->bindInnerCancellation($promise, $innerPromise);
 
         return $this->withCancellation($this->trackErrorState($promise));
     }
@@ -105,28 +116,58 @@ class Transaction implements TransactionInterface
 
         if (\count($params) === 0) {
             $promise = $this->connection->streamQuery($sql, $bufferSize);
-        } else {
-            $promise = $this->getCachedStatement($sql)
-                ->then(function (array $result) use ($params, $bufferSize) {
-                    /** @var PreparedStatement $stmt */
-                    [$stmt, $isCached] = $result;
 
-                    return $stmt->executeStream(array_values($params), $bufferSize)
-                        ->then(function (MysqlRowStream $stream) use ($stmt, $isCached): MysqlRowStream {
-                            if ($stream instanceof RowStream) {
-                                if (! $isCached) {
-                                    $stream->waitForCommand()->finally($stmt->close(...));
-                                }
-                            }
-
-                            return $stream;
-                        })
-                    ;
-                })
-            ;
+            return $this->withCancellation($this->trackErrorState($promise));
         }
 
+        $innerPromise = null;
+
+        $promise = $this->getCachedStatement($sql)
+            ->then(function (array $result) use ($params, $bufferSize, &$innerPromise) {
+                /** @var PreparedStatement $stmt */
+                [$stmt, $isCached] = $result;
+
+                $innerPromise = $stmt->executeStream(array_values($params), $bufferSize)
+                    ->then(function (MysqlRowStream $stream) use ($stmt, $isCached): MysqlRowStream {
+                        if ($stream instanceof RowStream) {
+                            if (! $isCached) {
+                                $stream->waitForCommand()->finally($stmt->close(...));
+                            }
+                        }
+
+                        return $stream;
+                    })
+                ;
+
+                return $innerPromise;
+            })
+        ;
+
+        $this->bindInnerCancellation($promise, $innerPromise);
+
         return $this->withCancellation($this->trackErrorState($promise));
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @return PromiseInterface<PreparedStatementInterface>
+     */
+    public function prepare(string $sql): PromiseInterface
+    {
+        $this->ensureActiveAndNotFailed();
+
+        $innerPromise = $this->connection->prepare($sql);
+
+        $promise = $innerPromise->then(
+            function (PreparedStatementInterface $stmt) {
+                return new TransactionPreparedStatement($stmt, $this->connection);
+            }
+        );
+
+        $this->bindInnerCancellation($promise, $innerPromise);
+
+        return $this->trackErrorState($promise);
     }
 
     /**
@@ -203,24 +244,6 @@ class Transaction implements TransactionInterface
     {
         $this->ensureActive();
         $this->onRollbackCallbacks[] = $callback;
-    }
-
-    /**
-     * {@inheritdoc}
-     *
-     * @return PromiseInterface<PreparedStatementInterface>
-     */
-    public function prepare(string $sql): PromiseInterface
-    {
-        $this->ensureActiveAndNotFailed();
-
-        $promise = $this->connection->prepare($sql)->then(
-            function (PreparedStatementInterface $stmt) {
-                return new TransactionPreparedStatement($stmt, $this->connection);
-            }
-        );
-
-        return $this->trackErrorState($promise);
     }
 
     /**
@@ -391,22 +414,6 @@ class Transaction implements TransactionInterface
     public function isClosed(): bool
     {
         return $this->connection->isClosed();
-    }
-
-    /**
-     * Bridges cancel() → cancelChain() on a public-facing promise.
-     *
-     * @template T
-     *
-     * @param PromiseInterface<T> $promise
-     *
-     * @return PromiseInterface<T>
-     */
-    private function withCancellation(PromiseInterface $promise): PromiseInterface
-    {
-        $promise->onCancel($promise->cancelChain(...));
-
-        return $promise;
     }
 
     /**
