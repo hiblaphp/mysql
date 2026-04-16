@@ -17,7 +17,9 @@ use Hibla\Promise\Interfaces\PromiseInterface;
  */
 final class ConnectionSetup implements ConnectionSetupInterface
 {
-    public function __construct(private readonly Connection $connection) {}
+    public function __construct(private readonly Connection $connection)
+    {
+    }
 
     /**
      * {@inheritdoc}
@@ -37,6 +39,7 @@ final class ConnectionSetup implements ConnectionSetupInterface
     public function execute(string $sql): PromiseInterface
     {
         return $this->connection->query($sql)
-            ->then(fn(MysqlResult $result) => $result->getAffectedRows());
+            ->then(fn (MysqlResult $result) => $result->affectedRows)
+        ;
     }
 }

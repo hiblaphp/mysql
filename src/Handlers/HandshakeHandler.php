@@ -45,7 +45,7 @@ final class HandshakeHandler
     private bool $compressionNegotiated = false;
 
     /**
-     *  @var Promise<int> 
+     * @var Promise<int>
      */
     private Promise $promise;
 

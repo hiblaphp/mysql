@@ -15,52 +15,51 @@ use Rcalicdan\MySQLBinaryProtocol\Frame\Result\ColumnDefinition;
  */
 class Result implements MysqlResult
 {
+    /**
+     * The number of rows returned by SELECT queries.
+     */
+    public readonly int $rowCount;
+
+    /**
+     * The number of columns in the result set.
+     */
+    public readonly int $columnCount;
+
+    /**
+     * The full metadata for every column in the result set.
+     *
+     * @var array<int, MysqlColumnDefinition>
+     */
+    public readonly array $fields;
+
+    /**
+     * The column names from the result set.
+     *
+     * @var array<int, string>
+     */
+    public array $columns {
+        get => array_map(fn (MysqlColumnDefinition $col) => $col->name, $this->fields);
+    }
+
     private int $position = 0;
 
-    private readonly int $numRows;
-
-    private readonly int $columnCount;
-
-    /**
-     *  @var array<int, string>
-     */
-    private readonly array $columnNames;
-
-    /**
-     *  @var array<int, MysqlColumnDefinition>
-     */
-    private readonly array $resolvedColumns;
-
-    /**
-     * Pointer to the next result set (if multiple results exist).
-     */
     private ?MysqlResult $nextResult = null;
 
-    /**
-     * @param array<int, array<string, mixed>> $rows
-     * @param array<int, ColumnDefinition> $columnDefinitions
-     */
     public function __construct(
-        private readonly array $rows = [],
-        private readonly int $affectedRows = 0,
-        private readonly int $lastInsertId = 0,
-        private readonly int $warningCount = 0,
+        public readonly int $affectedRows = 0,
+        public readonly int $lastInsertId = 0,
+        public readonly int $warningCount = 0,
+        public readonly int $connectionId = 0,
         private readonly array $columnDefinitions = [],
-        private readonly int $connectionId = 0
+        private readonly array $rows = [],
     ) {
-        $this->numRows = \count($this->rows);
+        $this->rowCount = \count($this->rows);
+        $this->columnCount = \count($this->columnDefinitions);
 
-        $this->resolvedColumns = array_map(
-            fn(ColumnDefinition $col) => new MysqlColumnDefinition($col),
+        $this->fields = array_map(
+            fn (ColumnDefinition $col) => new MysqlColumnDefinition($col),
             $this->columnDefinitions
         );
-
-        $this->columnNames = array_map(
-            fn(MysqlColumnDefinition $col) => $col->name,
-            $this->resolvedColumns
-        );
-
-        $this->columnCount = \count($this->columnNames);
     }
 
     /**
@@ -73,7 +72,7 @@ class Result implements MysqlResult
     }
 
     /**
-     * {@inheritdoc}
+     * Returns the next result set if it exists.
      */
     public function nextResult(): ?MysqlResult
     {
@@ -81,35 +80,37 @@ class Result implements MysqlResult
     }
 
     /**
-     * {@inheritdoc}
+     * Checks if any rows were affected by the operation.
      */
-    public function getConnectionId(): int
+    public function hasAffectedRows(): bool
     {
-        return $this->connectionId;
+        return $this->affectedRows > 0;
     }
 
     /**
-     * @inheritDoc
+     * Checks if an auto-increment ID was generated.
      */
-    public function getFields(): array
+    public function hasLastInsertId(): bool
     {
-        return $this->resolvedColumns;
+        return $this->lastInsertId > 0;
     }
 
     /**
-     * {@inheritdoc}
+     * Checks if the result set is empty.
      */
-    public function getColumns(): array
+    public function isEmpty(): bool
     {
-        return $this->columnNames;
+        return $this->rowCount === 0;
     }
 
     /**
-     * {@inheritdoc}
+     * Fetches the next row as an associative array.
+     *
+     * @return array<string, mixed>|null
      */
     public function fetchAssoc(): ?array
     {
-        if ($this->position >= $this->numRows) {
+        if ($this->position >= $this->rowCount) {
             return null;
         }
 
@@ -118,7 +119,9 @@ class Result implements MysqlResult
     }
 
     /**
-     * {@inheritdoc}
+     * Fetches all rows.
+     *
+     * @return array<int, array<string, mixed>>
      */
     public function fetchAll(): array
     {
@@ -126,15 +129,19 @@ class Result implements MysqlResult
     }
 
     /**
-     * {@inheritdoc}
+     * Fetches a single column from all rows.
+     *
+     * @return array<int, mixed>
      */
     public function fetchColumn(string|int $column = 0): array
     {
-        return array_map(fn($row) => $row[$column] ?? null, $this->rows);
+        return array_map(fn ($row) => $row[$column] ?? null, $this->rows);
     }
 
     /**
-     * {@inheritdoc}
+     * Fetches the first row.
+     *
+     * @return array<string, mixed>|null
      */
     public function fetchOne(): ?array
     {
@@ -142,71 +149,7 @@ class Result implements MysqlResult
     }
 
     /**
-     * {@inheritdoc}
-     */
-    public function getAffectedRows(): int
-    {
-        return $this->affectedRows;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getLastInsertId(): int
-    {
-        return $this->lastInsertId;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getWarningCount(): int
-    {
-        return $this->warningCount;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function hasAffectedRows(): bool
-    {
-        return $this->affectedRows > 0;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function hasLastInsertId(): bool
-    {
-        return $this->lastInsertId > 0;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function rowCount(): int
-    {
-        return $this->numRows;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getColumnCount(): int
-    {
-        return $this->columnCount;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function isEmpty(): bool
-    {
-        return $this->numRows === 0;
-    }
-
-    /**
-     * {@inheritdoc}
+     * Allows iteration in foreach loops.
      */
     public function getIterator(): \Traversable
     {

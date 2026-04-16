@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Hibla\Mysql\Internals;
 
 use Hibla\Mysql\Interfaces\MysqlResult;
-
 use Hibla\Mysql\Interfaces\MysqlRowStream;
 use Hibla\Mysql\ValueObjects\StreamContext;
 use Hibla\Mysql\ValueObjects\StreamStats;
@@ -13,6 +12,7 @@ use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use Hibla\Sql\Exceptions\PreparedException;
 use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
+use Hibla\Sql\StreamingStatementInterface;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Result\ColumnDefinition;
 
 /**
@@ -20,7 +20,7 @@ use Rcalicdan\MySQLBinaryProtocol\Frame\Result\ColumnDefinition;
  *
  * @internal
  */
-class PreparedStatement implements PreparedStatementInterface
+class PreparedStatement implements PreparedStatementInterface, StreamingStatementInterface
 {
     private bool $isClosed = false;
 
@@ -46,6 +46,7 @@ class PreparedStatement implements PreparedStatementInterface
      * {@inheritdoc}
      *
      * @param array<int, mixed> $params
+     *
      * @return PromiseInterface<MysqlResult>
      */
     public function execute(array $params = []): PromiseInterface
@@ -70,6 +71,7 @@ class PreparedStatement implements PreparedStatementInterface
      *
      * @param array<int, mixed> $params
      * @param int $bufferSize Maximum rows to buffer before applying backpressure (default: 100)
+     *
      * @return PromiseInterface<MysqlRowStream>
      */
     public function executeStream(array $params = [], int $bufferSize = 100): PromiseInterface
@@ -87,9 +89,9 @@ class PreparedStatement implements PreparedStatementInterface
         $normalizedParams = $this->normalizeParameters($params);
         $stream = new RowStream($bufferSize);
 
-        $stream->setBackpressureHandler(function (bool $shouldPause): void {
+        $stream->backpressureHandler = function (bool $shouldPause): void {
             $shouldPause ? $this->connection->pause() : $this->connection->resume();
-        });
+        };
 
         /** @var Promise<MysqlRowStream> $outerPromise */
         $outerPromise = new Promise();
@@ -118,7 +120,7 @@ class PreparedStatement implements PreparedStatementInterface
         /** @var PromiseInterface<StreamStats> $commandPromise */
         $commandPromise = $this->connection->executeStream($this, $normalizedParams, $context);
 
-        $stream->setCommandPromise($commandPromise);
+        $stream->commandQueuePromise = $commandPromise;
 
         $commandPromise->then(
             $stream->markCommandFinished(...),
@@ -153,6 +155,7 @@ class PreparedStatement implements PreparedStatementInterface
      * Normalize parameters (convert booleans to integers).
      *
      * @param array<int, mixed> $params
+     *
      * @return array<int, mixed>
      */
     private function normalizeParameters(array $params): array

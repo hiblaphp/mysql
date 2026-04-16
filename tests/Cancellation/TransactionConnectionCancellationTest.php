@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use function Hibla\await;
-
 use Hibla\EventLoop\Loop;
 use Hibla\Promise\Exceptions\CancelledException;
 use Hibla\Sql\Exceptions\QueryException;
+
+use function Hibla\await;
 
 beforeAll(function (): void {
     $conn = makeConnection(enableServerSideCancellation: true);
@@ -46,8 +46,9 @@ describe('Transaction Cancellation', function (): void {
             $insertPromise->cancel();
         });
 
-        expect(fn() => await($insertPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($insertPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -66,8 +67,9 @@ describe('Transaction Cancellation', function (): void {
             $insertPromise->cancel();
         });
 
-        expect(fn() => await($insertPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($insertPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         if ($conn->wasQueryCancelled()) {
             try {
@@ -101,8 +103,9 @@ describe('Transaction Cancellation', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn() => await($execPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($execPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -124,8 +127,9 @@ describe('Transaction Cancellation', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn() => await($execPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($execPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         if ($conn->wasQueryCancelled()) {
             try {
@@ -165,8 +169,9 @@ describe('Transaction Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -186,8 +191,9 @@ describe('Transaction Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         if ($conn->wasQueryCancelled()) {
             try {
@@ -219,8 +225,9 @@ describe('Transaction Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         if ($conn->wasQueryCancelled()) {
             try {
@@ -254,8 +261,9 @@ describe('Transaction Cancellation', function (): void {
             $updatePromise->cancel();
         });
 
-        expect(fn() => await($updatePromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($updatePromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -276,8 +284,9 @@ describe('Transaction Cancellation', function (): void {
             $updatePromise->cancel();
         });
 
-        expect(fn() => await($updatePromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($updatePromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         if ($conn->wasQueryCancelled()) {
             try {
@@ -290,7 +299,7 @@ describe('Transaction Cancellation', function (): void {
 
         $result = await($conn->query("UPDATE cancel_test SET value = 'final_value' WHERE id = 1"));
 
-        expect($result->getAffectedRows())->toBe(1);
+        expect($result->affectedRows)->toBe(1);
 
         await($conn->query('ROLLBACK'));
         $conn->close();
@@ -309,8 +318,9 @@ describe('Transaction Cancellation', function (): void {
             $updatePromise->cancel();
         });
 
-        expect(fn() => await($updatePromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($updatePromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         if ($conn->wasQueryCancelled()) {
             try {

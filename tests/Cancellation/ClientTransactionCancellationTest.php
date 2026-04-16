@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use function Hibla\await;
-use function Hibla\sleep;
-
 use Hibla\EventLoop\Loop;
 use Hibla\Promise\Exceptions\CancelledException;
+
+use function Hibla\await;
+use function Hibla\sleep;
 
 beforeEach(function (): void {
     $client = makeTransactionClient(enableServerSideCancellation: true);
@@ -41,8 +41,9 @@ describe('Transaction Non-Prepared Query Cancellation', function (): void {
             $slowPromise->cancel();
         });
 
-        expect(fn() => await($slowPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($slowPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -121,8 +122,9 @@ describe('Transaction Prepared Query Cancellation', function (): void {
             $slowPromise->cancel();
         });
 
-        expect(fn() => await($slowPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($slowPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -238,8 +240,9 @@ describe('Transaction Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 

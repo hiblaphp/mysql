@@ -10,6 +10,7 @@ use Hibla\Promise\Promise;
  * Represents a queued command to be executed on the MySQL connection.
  *
  * @internal
+ *
  * @package Hibla\Mysql\ValueObjects
  */
 final class CommandRequest

@@ -67,24 +67,25 @@ final class ExecuteHandler
     private ?DynamicRowOrEofParser $rowParser = null;
 
     /**
-     *  @var Promise<Result|StreamStats>|null
+     * @var Promise<Result|StreamStats>|null
      */
     private ?Promise $currentPromise = null;
 
     /**
-     *  @var array<int, array<string, mixed>>
+     * @var array<int, array<string, mixed>>
      */
     private array $rows = [];
 
     /**
-     *  @var array<int, ColumnDefinition>
+     * @var array<int, ColumnDefinition>
      */
     private array $columnDefinitions = [];
 
     public function __construct(
         private readonly Connection $connection,
         private readonly CommandBuilder $commandBuilder
-    ) {}
+    ) {
+    }
 
     /**
      * @param array<int, mixed> $params
@@ -169,6 +170,7 @@ final class ExecuteHandler
             $this->currentPromise?->reject(
                 $this->createExceptionFromError($frame->errorCode, $frame->errorMessage)
             );
+
             return true;
         }
 
@@ -184,6 +186,7 @@ final class ExecuteHandler
 
             if ($frame->hasMoreResults()) {
                 $this->prepareDrain($result, null);
+
                 return false;
             }
 
@@ -194,11 +197,13 @@ final class ExecuteHandler
             }
 
             $this->currentPromise?->resolve($this->headResult);
+
             return true;
         }
 
         if ($frame instanceof ResultSetHeader) {
             $this->state = ExecuteState::CHECK_DATA;
+
             return false;
         }
 
@@ -228,7 +233,7 @@ final class ExecuteHandler
 
     private function linkValidResult(Result $result): void
     {
-        if ($result->rowCount() > 0 || $result->getAffectedRows() > 0 || $result->hasLastInsertId() || \count($result->getFields()) > 0) {
+        if ($result->rowCount > 0 || $result->affectedRows > 0 || $result->hasLastInsertId() || \count($result->fields) > 0) {
             $this->tailResult?->setNextResult($result);
             $this->tailResult = $result;
         }
@@ -248,12 +253,14 @@ final class ExecuteHandler
             $rowFrame = $tempParser->parseRemainingRow($reader);
 
             $this->handleRowData($rowFrame->values);
+
             return false;
         }
 
         if ($frame instanceof EofPacket) {
             $this->state = ExecuteState::ROWS;
             $this->rowParser = new DynamicRowOrEofParser($this->columnDefinitions);
+
             return false;
         }
 
@@ -263,6 +270,7 @@ final class ExecuteHandler
                 $this->receivedNewMetadata = true;
             }
             $this->columnDefinitions[] = $frame;
+
             return false;
         }
 
@@ -294,11 +302,13 @@ final class ExecuteHandler
                 }
             }
             $this->currentPromise?->reject($exception);
+
             return true;
         }
 
         if ($frame instanceof TextRow || $frame instanceof BinaryRow) {
             $this->handleRowData($frame->values);
+
             return false;
         }
 
@@ -339,6 +349,7 @@ final class ExecuteHandler
                 if ($this->streamContext->onError !== null) {
                     ($this->streamContext->onError)($e);
                 }
+
                 throw $e;
             }
         } else {
@@ -375,6 +386,7 @@ final class ExecuteHandler
 
         if ($packet->hasMoreResults()) {
             $this->prepareDrain($currentResult, $currentStats);
+
             return false;
         }
 

@@ -2,22 +2,20 @@
 
 declare(strict_types=1);
 
-use function Hibla\await;
-
 use Hibla\Mysql\Exceptions\PoolException;
 use Hibla\Mysql\Internals\Connection;
 use Hibla\Mysql\Manager\PoolManager;
-
-use function Hibla\sleep;
-
 use Hibla\Socket\Connector;
+
+use function Hibla\await;
+use function Hibla\sleep;
 
 describe('PoolManager', function (): void {
     describe('Construction and Validation', function (): void {
 
         it('creates a pool with default settings', function (): void {
             $pool = makePool();
-            $stats = $pool->getStats();
+            $stats = $pool->stats;
 
             expect($stats['max_size'])->toBe(5)
                 ->and($stats['active_connections'])->toBe(0)
@@ -31,7 +29,7 @@ describe('PoolManager', function (): void {
 
         it('accepts a MysqlConfig instance directly', function (): void {
             $pool = new PoolManager(testMysqlConfig(), 3);
-            $stats = $pool->getStats();
+            $stats = $pool->stats;
 
             expect($stats['max_size'])->toBe(3);
 
@@ -47,7 +45,7 @@ describe('PoolManager', function (): void {
                 'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
             ], 3);
 
-            expect($pool->getStats()['max_size'])->toBe(3);
+            expect($pool->stats['max_size'])->toBe(3);
 
             $pool->close();
         });
@@ -64,7 +62,7 @@ describe('PoolManager', function (): void {
                 3
             );
 
-            expect($pool->getStats()['max_size'])->toBe(3);
+            expect($pool->stats['max_size'])->toBe(3);
 
             $pool->close();
         });
@@ -144,7 +142,7 @@ describe('PoolManager', function (): void {
             $pool = makePool();
             $conn = await($pool->get());
 
-            expect($pool->getStats()['active_connections'])->toBe(1);
+            expect($pool->stats['active_connections'])->toBe(1);
 
             $pool->release($conn);
             $pool->close();
@@ -156,7 +154,7 @@ describe('PoolManager', function (): void {
             $conn2 = await($pool->get());
             $conn3 = await($pool->get());
 
-            expect($pool->getStats()['active_connections'])->toBe(3);
+            expect($pool->stats['active_connections'])->toBe(3);
 
             $pool->release($conn1);
             $pool->release($conn2);
@@ -169,11 +167,11 @@ describe('PoolManager', function (): void {
             $conn1 = await($pool->get());
             $pool->release($conn1);
 
-            $stats1 = $pool->getStats();
+            $stats1 = $pool->stats;
 
             $conn2 = await($pool->get());
 
-            $stats2 = $pool->getStats();
+            $stats2 = $pool->stats;
 
             expect($stats1['pooled_connections'])->toBe(1)
                 ->and($stats2['active_connections'])->toBe(1)
@@ -190,14 +188,14 @@ describe('PoolManager', function (): void {
 
             $pending = $pool->get();
 
-            expect($pool->getStats()['waiting_requests'])->toBe(1);
+            expect($pool->stats['waiting_requests'])->toBe(1);
 
             $pool->release($conn1);
 
             $conn3 = await($pending);
 
             expect($conn3)->toBeInstanceOf(Connection::class)
-                ->and($pool->getStats()['waiting_requests'])->toBe(0)
+                ->and($pool->stats['waiting_requests'])->toBe(0)
             ;
 
             $pool->release($conn2);
@@ -239,7 +237,7 @@ describe('PoolManager', function (): void {
             $conn = await($pool->get());
             $pool->release($conn);
 
-            expect($pool->getStats()['pooled_connections'])->toBe(1);
+            expect($pool->stats['pooled_connections'])->toBe(1);
 
             $pool->close();
         });
@@ -261,8 +259,8 @@ describe('PoolManager', function (): void {
             $conn->close();
             $pool->release($conn);
 
-            expect($pool->getStats()['pooled_connections'])->toBe(0)
-                ->and($pool->getStats()['active_connections'])->toBe(0)
+            expect($pool->stats['pooled_connections'])->toBe(0)
+                ->and($pool->stats['active_connections'])->toBe(0)
             ;
 
             $pool->close();
@@ -274,15 +272,15 @@ describe('PoolManager', function (): void {
 
             $pending = $pool->get();
 
-            expect($pool->getStats()['waiting_requests'])->toBe(1);
+            expect($pool->stats['waiting_requests'])->toBe(1);
 
             $pool->release($conn1);
 
             $conn2 = await($pending);
 
             expect($conn2)->toBeInstanceOf(Connection::class)
-                ->and($pool->getStats()['waiting_requests'])->toBe(0)
-                ->and($pool->getStats()['pooled_connections'])->toBe(0)
+                ->and($pool->stats['waiting_requests'])->toBe(0)
+                ->and($pool->stats['pooled_connections'])->toBe(0)
             ;
 
             $pool->release($conn2);
@@ -293,12 +291,12 @@ describe('PoolManager', function (): void {
             $pool = makePool();
             $conn = await($pool->get());
 
-            expect($pool->getStats()['active_connections'])->toBe(1);
+            expect($pool->stats['active_connections'])->toBe(1);
 
             $conn->close();
             $pool->release($conn);
 
-            expect($pool->getStats()['active_connections'])->toBe(0);
+            expect($pool->stats['active_connections'])->toBe(0);
 
             $pool->close();
         });
@@ -308,7 +306,7 @@ describe('PoolManager', function (): void {
 
         it('returns correct stats with no connections', function (): void {
             $pool = makePool(10);
-            $stats = $pool->getStats();
+            $stats = $pool->stats;
 
             expect($stats['active_connections'])->toBe(0)
                 ->and($stats['pooled_connections'])->toBe(0)
@@ -326,17 +324,17 @@ describe('PoolManager', function (): void {
             $conn1 = await($pool->get());
             $conn2 = await($pool->get());
 
-            expect($pool->getStats()['active_connections'])->toBe(2);
+            expect($pool->stats['active_connections'])->toBe(2);
 
             $pool->release($conn1);
 
-            expect($pool->getStats()['active_connections'])->toBe(2)
-                ->and($pool->getStats()['pooled_connections'])->toBe(1)
+            expect($pool->stats['active_connections'])->toBe(2)
+                ->and($pool->stats['pooled_connections'])->toBe(1)
             ;
 
             $pool->release($conn2);
 
-            expect($pool->getStats()['pooled_connections'])->toBe(2);
+            expect($pool->stats['pooled_connections'])->toBe(2);
 
             $pool->close();
         });
@@ -344,7 +342,7 @@ describe('PoolManager', function (): void {
         it('tracks connection creation timestamps', function (): void {
             $pool = makePool();
             $conn = await($pool->get());
-            $stats = $pool->getStats();
+            $stats = $pool->stats;
 
             expect($stats['tracked_connections'])->toBe(1);
 
@@ -360,7 +358,7 @@ describe('PoolManager', function (): void {
             $conn = await($pool->get());
             $pool->release($conn);
 
-            expect($pool->getStats()['pooled_connections'])->toBe(1);
+            expect($pool->stats['pooled_connections'])->toBe(1);
 
             $stats = await($pool->healthCheck());
 
@@ -395,7 +393,7 @@ describe('PoolManager', function (): void {
             $pool->release($conn2);
             $pool->release($conn3);
 
-            expect($pool->getStats()['pooled_connections'])->toBe(3);
+            expect($pool->stats['pooled_connections'])->toBe(3);
 
             $stats = await($pool->healthCheck());
 
@@ -414,7 +412,7 @@ describe('PoolManager', function (): void {
 
             await($pool->healthCheck());
 
-            expect($pool->getStats()['pooled_connections'])->toBe(1);
+            expect($pool->stats['pooled_connections'])->toBe(1);
 
             $pool->close();
         });
@@ -460,7 +458,7 @@ describe('PoolManager', function (): void {
 
             $pool->close();
 
-            $stats = $pool->getStats();
+            $stats = $pool->stats;
 
             expect($stats['active_connections'])->toBe(0)
                 ->and($stats['pooled_connections'])->toBe(0)
@@ -479,7 +477,7 @@ describe('PoolManager', function (): void {
                 $error = $e;
             });
 
-            expect($pool->getStats()['waiting_requests'])->toBe(1);
+            expect($pool->stats['waiting_requests'])->toBe(1);
 
             $pool->release($conn);
             $resolvedConn = await($pending);
@@ -498,7 +496,7 @@ describe('PoolManager', function (): void {
                 $error2 = $e;
             });
 
-            expect($pool2->getStats()['waiting_requests'])->toBe(1);
+            expect($pool2->stats['waiting_requests'])->toBe(1);
 
             $pool2->close();
 
@@ -535,8 +533,8 @@ describe('PoolManager', function (): void {
                 $pool->release($conn);
             }
 
-            expect($pool->getStats()['active_connections'])->toBe(1)
-                ->and($pool->getStats()['pooled_connections'])->toBe(1)
+            expect($pool->stats['active_connections'])->toBe(1)
+                ->and($pool->stats['pooled_connections'])->toBe(1)
             ;
 
             $pool->close();
@@ -550,19 +548,19 @@ describe('PoolManager', function (): void {
                 $connections[] = await($pool->get());
             }
 
-            expect($pool->getStats()['active_connections'])->toBe(3);
+            expect($pool->stats['active_connections'])->toBe(3);
 
             // A 4th request should be queued not create a new connection
             $pending = $pool->get();
-            expect($pool->getStats()['waiting_requests'])->toBe(1)
-                ->and($pool->getStats()['active_connections'])->toBe(3)
+            expect($pool->stats['waiting_requests'])->toBe(1)
+                ->and($pool->stats['active_connections'])->toBe(3)
             ;
 
             $pool->release($connections[0]);
 
             $conn4 = await($pending);
-            expect($pool->getStats()['active_connections'])->toBe(3)
-                ->and($pool->getStats()['waiting_requests'])->toBe(0)
+            expect($pool->stats['active_connections'])->toBe(3)
+                ->and($pool->stats['waiting_requests'])->toBe(0)
             ;
 
             $pool->release($conn4);
@@ -599,7 +597,7 @@ describe('PoolManager', function (): void {
             $conn->close();
             $pool->release($conn);
 
-            expect($pool->getStats()['active_connections'])->toBe(0);
+            expect($pool->stats['active_connections'])->toBe(0);
 
             $newConn = await($pool->get());
             expect($newConn->isReady())->toBeTrue();
@@ -616,7 +614,7 @@ describe('PoolManager', function (): void {
             $conn = await($pool->get());
             $pool->release($conn);
 
-            expect($pool->getStats()['pooled_connections'])->toBe(1);
+            expect($pool->stats['pooled_connections'])->toBe(1);
 
             sleep(1.1);
 
@@ -636,8 +634,8 @@ describe('PoolManager', function (): void {
 
             $pool->release($conn);
 
-            expect($pool->getStats()['pooled_connections'])->toBe(0)
-                ->and($pool->getStats()['active_connections'])->toBe(0)
+            expect($pool->stats['pooled_connections'])->toBe(0)
+                ->and($pool->stats['active_connections'])->toBe(0)
             ;
 
             $pool->close();
@@ -668,7 +666,7 @@ describe('PoolManager', function (): void {
             $conn = await($pool->get());
             $pool->release($conn);
 
-            expect($pool->getStats()['pooled_connections'])->toBe(1);
+            expect($pool->stats['pooled_connections'])->toBe(1);
 
             unset($pool);
 
@@ -685,7 +683,7 @@ describe('PoolManager', function (): void {
             $pool->release($conn2);
             $pool->release($conn3);
 
-            expect($pool->getStats()['pooled_connections'])->toBe(3);
+            expect($pool->stats['pooled_connections'])->toBe(3);
 
             unset($pool);
 
@@ -705,7 +703,7 @@ describe('PoolManager', function (): void {
                 $error = $e;
             });
 
-            expect($pool->getStats()['waiting_requests'])->toBe(1);
+            expect($pool->stats['waiting_requests'])->toBe(1);
 
             unset($pool);
 

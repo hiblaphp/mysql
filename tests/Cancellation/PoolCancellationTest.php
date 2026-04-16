@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use function Hibla\await;
-use function Hibla\delay;
-
 use Hibla\EventLoop\Loop;
 use Hibla\Mysql\Internals\Connection;
 use Hibla\Promise\Exceptions\CancelledException;
+
+use function Hibla\await;
+use function Hibla\delay;
 
 describe('Pool Waiter Cancellation', function (): void {
 
@@ -18,8 +18,9 @@ describe('Pool Waiter Cancellation', function (): void {
         $waiter = $pool->get();
         $waiter->cancel();
 
-        expect(fn() => await($waiter))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($waiter))
+            ->toThrow(CancelledException::class)
+        ;
 
         $pool->release($conn);
         $pool->close();
@@ -29,12 +30,12 @@ describe('Pool Waiter Cancellation', function (): void {
         $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
-        expect($pool->getStats()['active_connections'])->toBe(1);
+        expect($pool->stats['active_connections'])->toBe(1);
 
         $waiter = $pool->get();
         $waiter->cancel();
 
-        expect($pool->getStats()['active_connections'])->toBe(1);
+        expect($pool->stats['active_connections'])->toBe(1);
 
         $pool->release($conn);
         $pool->close();
@@ -47,23 +48,23 @@ describe('Pool Waiter Cancellation', function (): void {
         $cancelledWaiter = $pool->get();
         $activeWaiter = $pool->get();
 
-        expect($pool->getStats()['waiting_requests'])->toBe(2);
+        expect($pool->stats['waiting_requests'])->toBe(2);
 
         $cancelledWaiter->cancel();
 
-        expect($pool->getStats()['waiting_requests'])->toBe(1);
+        expect($pool->stats['waiting_requests'])->toBe(1);
 
         $pool->release($conn);
 
         $resolvedConn = await($activeWaiter);
 
-        // Give the Event Loop a moment to process the 'finally' callback 
+        // Give the Event Loop a moment to process the 'finally' callback
         // that decrements the pendingWaiters counter.
         await(delay(0.01));
 
         expect($resolvedConn)->toBeInstanceOf(Connection::class)
             ->and($resolvedConn->isReady())->toBeTrue()
-            ->and($pool->getStats()['waiting_requests'])->toBe(0)
+            ->and($pool->stats['waiting_requests'])->toBe(0)
         ;
 
         $pool->release($resolvedConn);
@@ -80,7 +81,7 @@ describe('Pool Waiter Cancellation', function (): void {
         $pool->release($conn);
 
         // No active waiters — connection should park in idle pool
-        expect($pool->getStats()['pooled_connections'])->toBe(1);
+        expect($pool->stats['pooled_connections'])->toBe(1);
 
         $pool->close();
     });
@@ -121,8 +122,9 @@ describe('Pool Drain and Release', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
@@ -132,8 +134,8 @@ describe('Pool Drain and Release', function (): void {
         // Wait long enough for the kill connection to open, execute, and drain
         await(delay(3.0));
 
-        expect($pool->getStats()['pooled_connections'])->toBe(1)
-            ->and($pool->getStats()['draining_connections'])->toBe(0)
+        expect($pool->stats['pooled_connections'])->toBe(1)
+            ->and($pool->stats['draining_connections'])->toBe(0)
         ;
 
         $pool->close();
@@ -149,8 +151,9 @@ describe('Pool Drain and Release', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         $pool->release($conn);
 
@@ -178,8 +181,9 @@ describe('Pool Drain and Release', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         // Queue a waiter before releasing
         $waiter = $pool->get();
@@ -212,16 +216,17 @@ describe('Pool Drain and Release', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         $pool->release($conn);
 
         // Close the pool immediately — drain is still in progress
         $pool->close();
 
-        expect($pool->getStats()['draining_connections'])->toBe(0)
-            ->and($pool->getStats()['active_connections'])->toBe(0)
+        expect($pool->stats['draining_connections'])->toBe(0)
+            ->and($pool->stats['active_connections'])->toBe(0)
         ;
     });
 });
@@ -239,8 +244,9 @@ describe('Pool Query Cancellation Integration', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -260,8 +266,9 @@ describe('Pool Query Cancellation Integration', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn() => await($execPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($execPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -281,8 +288,9 @@ describe('Pool Query Cancellation Integration', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -301,15 +309,16 @@ describe('Pool Query Cancellation Integration', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         $pool->release($conn1);
         $pool->release($conn2);
 
         await(delay(3.0));
 
-        $stats = $pool->getStats();
+        $stats = $pool->stats;
 
         expect($stats['pooled_connections'])->toBe(2)
             ->and($stats['active_connections'])->toBe(2)
@@ -331,8 +340,9 @@ describe('Pool Query Cancellation Integration', function (): void {
                 $queryPromise->cancel();
             });
 
-            expect(fn() => await($queryPromise))
-                ->toThrow(CancelledException::class);
+            expect(fn () => await($queryPromise))
+                ->toThrow(CancelledException::class)
+            ;
 
             $pool->release($conn);
         }
@@ -343,7 +353,7 @@ describe('Pool Query Cancellation Integration', function (): void {
         $result = await($conn->query('SELECT "AllGreen" AS status'));
 
         expect($result->fetchOne()['status'])->toBe('AllGreen')
-            ->and($pool->getStats()['draining_connections'])->toBe(0)
+            ->and($pool->stats['draining_connections'])->toBe(0)
         ;
 
         $pool->release($conn);

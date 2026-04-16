@@ -63,17 +63,17 @@ final class QueryHandler
     private ?StreamStats $primaryStreamStats = null;
 
     /**
-     *  @var Promise<Result|StreamStats>|null
+     * @var Promise<Result|StreamStats>|null
      */
     private ?Promise $currentPromise = null;
 
     /**
-     *  @var array<int, ColumnDefinition>
+     * @var array<int, ColumnDefinition>
      */
     private array $columns = [];
 
     /**
-     *  @var array<int, array<string, mixed>>
+     * @var array<int, array<string, mixed>>
      */
     private array $rows = [];
 
@@ -182,6 +182,7 @@ final class QueryHandler
 
             if ($frame->hasMoreResults()) {
                 $this->prepareDrain($result, null);
+
                 return;
             }
 
@@ -232,7 +233,7 @@ final class QueryHandler
     {
         // Prevent appending trailing empty OK_Packets (like SP termination packets)
         // unless they contain actual columns or affected rows.
-        if ($result->rowCount() > 0 || $result->getAffectedRows() > 0 || $result->hasLastInsertId() || \count($result->getFields()) > 0) {
+        if ($result->rowCount > 0 || $result->affectedRows > 0 || $result->hasLastInsertId() || \count($result->fields) > 0) {
             $this->tailResult?->setNextResult($result);
             $this->tailResult = $result;
         }
@@ -246,16 +247,19 @@ final class QueryHandler
         if ($frame instanceof EofPacket) {
             $this->state = ParserState::ROWS;
             $this->rowParser = new RowOrEofParser($this->columnCount);
+
             return;
         }
 
         if ($frame instanceof ErrPacket) {
             $this->currentPromise?->reject($this->createExceptionFromError($frame->errorCode, $frame->errorMessage));
+
             return;
         }
 
         if ($frame instanceof ColumnDefinition) {
             $this->columns[] = $frame;
+
             return;
         }
 
@@ -266,6 +270,7 @@ final class QueryHandler
     {
         if ($this->rowParser === null) {
             $this->currentPromise?->reject(new QueryException('Row parser not initialized', 0));
+
             return;
         }
 
@@ -273,11 +278,13 @@ final class QueryHandler
 
         if ($frame instanceof ErrPacket) {
             $this->handleRowError($frame);
+
             return;
         }
 
         if ($frame instanceof EofPacket) {
             $this->handleEndOfResultSet($frame);
+
             return;
         }
 
@@ -316,6 +323,7 @@ final class QueryHandler
         // Use the packet's method instead of a private helper
         if ($packet->hasMoreResults()) {
             $this->prepareDrain($currentResult, $currentStats);
+
             return;
         }
 
@@ -398,6 +406,7 @@ final class QueryHandler
             if ($this->streamContext->onError !== null) {
                 ($this->streamContext->onError)($e);
             }
+
             throw $e;
         }
     }
@@ -411,7 +420,6 @@ final class QueryHandler
         if ($errorCode === 1205) {
             return new LockWaitTimeoutException($message, $errorCode);
         }
-
 
         $constraintErrors = [
             1062 => 'Duplicate entry (UNIQUE constraint)',

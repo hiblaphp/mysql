@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-use function Hibla\async;
-use function Hibla\await;
-use function Hibla\delay;
-
 use Hibla\EventLoop\Loop;
 use Hibla\Mysql\Internals\RowStream;
 use Hibla\Promise\Exceptions\CancelledException;
+
+use function Hibla\async;
+use function Hibla\await;
+use function Hibla\delay;
 
 describe('Query Cancellation', function (): void {
 
@@ -22,8 +22,9 @@ describe('Query Cancellation', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -39,8 +40,9 @@ describe('Query Cancellation', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
@@ -56,8 +58,9 @@ describe('Query Cancellation', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         $conn->clearCancelledFlag();
 
@@ -80,8 +83,9 @@ describe('Prepared Statement Cancellation', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn() => await($execPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($execPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -99,8 +103,9 @@ describe('Prepared Statement Cancellation', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn() => await($execPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($execPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
@@ -118,8 +123,9 @@ describe('Prepared Statement Cancellation', function (): void {
             $execPromise->cancel();
         });
 
-        expect(fn() => await($execPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($execPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         if ($conn->wasQueryCancelled()) {
             await($conn->query('DO SLEEP(0)'));
@@ -148,8 +154,9 @@ describe('Stream Query Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -165,8 +172,9 @@ describe('Stream Query Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
@@ -182,8 +190,9 @@ describe('Stream Query Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         if ($conn->wasQueryCancelled()) {
             await($conn->query('DO SLEEP(0)'));
@@ -336,8 +345,9 @@ describe('Execute Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -355,8 +365,9 @@ describe('Execute Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
@@ -374,8 +385,9 @@ describe('Execute Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         if ($conn->wasQueryCancelled()) {
             await($conn->query('DO SLEEP(0)'));
@@ -536,8 +548,9 @@ describe('Execute Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         if ($conn->wasQueryCancelled()) {
             await($conn->query('DO SLEEP(0)'));

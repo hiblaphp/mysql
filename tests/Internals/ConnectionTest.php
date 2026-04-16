@@ -2,16 +2,15 @@
 
 declare(strict_types=1);
 
-use function Hibla\await;
-
 use Hibla\Mysql\Internals\Connection;
 use Hibla\Mysql\Internals\PreparedStatement;
 use Hibla\Mysql\Internals\Result;
 use Hibla\Mysql\Internals\RowStream;
 use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Socket\Connector;
-
 use Hibla\Sql\Exceptions\ConnectionException;
+
+use function Hibla\await;
 
 beforeAll(function (): void {
     $conn = makeConnection();
@@ -202,7 +201,7 @@ describe('Connection', function (): void {
             $conn = makeConnection();
             $result = await($conn->query("SHOW TABLES LIKE 'pest_users'"));
 
-            expect($result->rowCount())->toBe(1);
+            expect($result->rowCount)->toBe(1);
 
             $conn->close();
         });
@@ -213,8 +212,8 @@ describe('Connection', function (): void {
                 "INSERT INTO pest_users (name, email, age) VALUES ('Alice', 'alice@example.com', 30)"
             ));
 
-            expect($result->getAffectedRows())->toBe(1)
-                ->and($result->getLastInsertId())->toBeGreaterThan(0)
+            expect($result->affectedRows)->toBe(1)
+                ->and($result->lastInsertId)->toBeGreaterThan(0)
             ;
 
             $conn->close();
@@ -229,7 +228,7 @@ describe('Connection', function (): void {
             $result = await($conn->query('SELECT * FROM pest_users'));
             $row = $result->fetchOne();
 
-            expect($result->rowCount())->toBe(1)
+            expect($result->rowCount)->toBe(1)
                 ->and($row['name'])->toBe('Bob')
                 ->and($row['email'])->toBe('bob@example.com')
                 ->and((int) $row['age'])->toBe(25)
@@ -247,7 +246,7 @@ describe('Connection', function (): void {
             $update = await($conn->query(
                 "UPDATE pest_users SET age = 21 WHERE email = 'charlie@example.com'"
             ));
-            expect($update->getAffectedRows())->toBe(1);
+            expect($update->affectedRows)->toBe(1);
 
             $select = await($conn->query('SELECT age FROM pest_users LIMIT 1'));
             expect((int) $select->fetchOne()['age'])->toBe(21);
@@ -264,7 +263,7 @@ describe('Connection', function (): void {
             $delete = await($conn->query(
                 "DELETE FROM pest_users WHERE email = 'dave@example.com'"
             ));
-            expect($delete->getAffectedRows())->toBe(1);
+            expect($delete->affectedRows)->toBe(1);
 
             $count = await($conn->query('SELECT COUNT(*) AS cnt FROM pest_users'));
             expect((int) $count->fetchOne()['cnt'])->toBe(0);
@@ -296,8 +295,8 @@ describe('Connection', function (): void {
             ));
             $result = await($stmt->execute(['Eve', 'eve@example.com', 28]));
 
-            expect($result->getAffectedRows())->toBe(1)
-                ->and($result->getLastInsertId())->toBeGreaterThan(0)
+            expect($result->affectedRows)->toBe(1)
+                ->and($result->lastInsertId)->toBeGreaterThan(0)
             ;
 
             await($stmt->close());
@@ -316,7 +315,7 @@ describe('Connection', function (): void {
             $result = await($stmt->execute(['frank@example.com']));
             $row = $result->fetchOne();
 
-            expect($result->rowCount())->toBe(1)
+            expect($result->rowCount)->toBe(1)
                 ->and($row['name'])->toBe('Frank')
                 ->and((int) $row['age'])->toBe(35)
             ;
@@ -339,7 +338,7 @@ describe('Connection', function (): void {
 
             foreach ($users as $user) {
                 $result = await($stmt->execute($user));
-                expect($result->getAffectedRows())->toBe(1);
+                expect($result->affectedRows)->toBe(1);
             }
 
             await($stmt->close());
@@ -372,7 +371,7 @@ describe('Connection', function (): void {
 
             $stmt = await($conn->prepare('UPDATE pest_users SET age = ? WHERE email = ?'));
             $result = await($stmt->execute([51, 'karl@example.com']));
-            expect($result->getAffectedRows())->toBe(1);
+            expect($result->affectedRows)->toBe(1);
 
             await($stmt->close());
 
@@ -390,7 +389,7 @@ describe('Connection', function (): void {
 
             $stmt = await($conn->prepare('DELETE FROM pest_users WHERE email = ?'));
             $result = await($stmt->execute(['laura@example.com']));
-            expect($result->getAffectedRows())->toBe(1);
+            expect($result->affectedRows)->toBe(1);
 
             await($stmt->close());
 
@@ -506,7 +505,7 @@ describe('Connection', function (): void {
                 // consume all rows
             }
 
-            expect($stream->getStats())->not->toBeNull();
+            expect($stream->stats)->not->toBeNull();
 
             $conn->close();
         });
@@ -588,7 +587,7 @@ describe('Connection', function (): void {
 
             $row = $result->fetchOne();
 
-            expect($result->rowCount())->toBe(1)
+            expect($result->rowCount)->toBe(1)
                 ->and($row['name'])->toBe('CustomConn')
                 ->and((int) $row['age'])->toBe(99)
             ;
@@ -604,8 +603,8 @@ describe('Connection', function (): void {
             ));
             $result = await($stmt->execute(['ConnUser', 'connuser@example.com', 55]));
 
-            expect($result->getAffectedRows())->toBe(1)
-                ->and($result->getLastInsertId())->toBeGreaterThan(0)
+            expect($result->affectedRows)->toBe(1)
+                ->and($result->lastInsertId)->toBeGreaterThan(0)
             ;
 
             await($stmt->close());
@@ -664,7 +663,7 @@ describe('Connection', function (): void {
             $verify = makeConnection();
             $result = await($verify->query("SELECT * FROM pest_users WHERE email = 'tom@example.com'"));
 
-            expect($result->rowCount())->toBe(1)
+            expect($result->rowCount)->toBe(1)
                 ->and($result->fetchOne()['name'])->toBe('Tom')
             ;
 
@@ -684,7 +683,7 @@ describe('Connection', function (): void {
             $verify = makeConnection();
             $result = await($verify->query("SELECT * FROM pest_users WHERE email = 'jerry@example.com'"));
 
-            expect($result->rowCount())->toBe(0);
+            expect($result->rowCount)->toBe(0);
 
             $conn->close();
             $verify->close();
@@ -734,7 +733,7 @@ describe('Connection', function (): void {
             $names = array_column($result->fetchAll(), 'name');
 
             expect($names)->toBe(['Dana'])
-                ->and($result->rowCount())->toBe(1)
+                ->and($result->rowCount)->toBe(1)
             ;
 
             $conn->close();
@@ -811,7 +810,7 @@ describe('Connection', function (): void {
             $names = array_column($result->fetchAll(), 'name');
 
             expect($names)->toBe(['Hank'])
-                ->and($result->rowCount())->toBe(1)
+                ->and($result->rowCount)->toBe(1)
             ;
 
             $conn->close();
@@ -877,7 +876,7 @@ describe('Connection', function (): void {
             '));
 
             $result = await($conn->query("SHOW TABLES LIKE 'pest_temp'"));
-            expect($result->rowCount())->toBe(1);
+            expect($result->rowCount)->toBe(1);
 
             await($conn->query('DROP TABLE IF EXISTS pest_temp'));
             $conn->close();
@@ -890,7 +889,7 @@ describe('Connection', function (): void {
             await($conn->query('DROP TABLE pest_drop_me'));
 
             $result = await($conn->query("SHOW TABLES LIKE 'pest_drop_me'"));
-            expect($result->rowCount())->toBe(0);
+            expect($result->rowCount)->toBe(0);
 
             $conn->close();
         });
@@ -969,7 +968,7 @@ describe('Connection', function (): void {
             $result = await($conn->query('SELECT * FROM pest_users'));
 
             expect($result->isEmpty())->toBeTrue()
-                ->and($result->rowCount())->toBe(0)
+                ->and($result->rowCount)->toBe(0)
             ;
 
             $conn->close();

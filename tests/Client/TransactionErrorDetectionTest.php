@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 use Hibla\Sql\Exceptions\DeadlockException;
 use Hibla\Sql\Exceptions\LockWaitTimeoutException;
-use Hibla\Sql\TransactionOptions;
 use Hibla\Sql\Transaction as TransactionInterface;
+use Hibla\Sql\TransactionOptions;
 
 use function Hibla\await;
 
@@ -42,15 +44,15 @@ describe('Lock Exceptions', function (): void {
             $caughtException = null;
 
             try {
-                await($tx1->execute("SELECT * FROM lock_test WHERE id = 1 FOR UPDATE"));
-                await($tx2->execute("SELECT * FROM lock_test WHERE id = 2 FOR UPDATE"));
+                await($tx1->execute('SELECT * FROM lock_test WHERE id = 1 FOR UPDATE'));
+                await($tx2->execute('SELECT * FROM lock_test WHERE id = 2 FOR UPDATE'));
 
-                $p1 = $tx1->execute("SELECT * FROM lock_test WHERE id = 2 FOR UPDATE");
-                $p2 = $tx2->execute("SELECT * FROM lock_test WHERE id = 1 FOR UPDATE");
+                $p1 = $tx1->execute('SELECT * FROM lock_test WHERE id = 2 FOR UPDATE');
+                $p2 = $tx2->execute('SELECT * FROM lock_test WHERE id = 1 FOR UPDATE');
 
                 await($p1);
                 await($p2);
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 $caughtException = $e;
             } finally {
                 if ($tx1->isActive()) {
@@ -80,10 +82,10 @@ describe('Lock Exceptions', function (): void {
             $caughtException = null;
 
             try {
-                await($tx1->execute("SELECT * FROM lock_test WHERE id = 1 FOR UPDATE"));
+                await($tx1->execute('SELECT * FROM lock_test WHERE id = 1 FOR UPDATE'));
 
-                await($tx2->execute("SELECT * FROM lock_test WHERE id = 1 FOR UPDATE"));
-            } catch (\Throwable $e) {
+                await($tx2->execute('SELECT * FROM lock_test WHERE id = 1 FOR UPDATE'));
+            } catch (Throwable $e) {
                 $caughtException = $e;
             } finally {
                 if ($tx1->isActive()) {
@@ -171,11 +173,12 @@ describe('Lock Exceptions', function (): void {
                 await($client->transaction(
                     function () use (&$attemptCount): void {
                         $attemptCount++;
+
                         throw new DeadlockException('Persistent deadlock', 1213);
                     },
                     $options
                 ));
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 $caughtException = $e;
             }
 
@@ -199,11 +202,12 @@ describe('Lock Exceptions', function (): void {
                 await($client->transaction(
                     function () use (&$attemptCount): void {
                         $attemptCount++;
+
                         throw new LockWaitTimeoutException('Persistent lock timeout', 1205);
                     },
                     $options
                 ));
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 $caughtException = $e;
             }
 

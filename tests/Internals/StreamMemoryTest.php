@@ -84,7 +84,7 @@ describe('Stream Memory', function (): void {
                 // consume
             }
 
-            $stats = $stream->getStats();
+            $stats = $stream->stats;
 
             expect($stats->rowCount)->toBe($totalRows)
                 ->and($stats->duration)->toBeGreaterThan(0.0)
@@ -187,7 +187,7 @@ describe('Stream Memory', function (): void {
                 // consume
             }
 
-            $stats = $stream->getStats();
+            $stats = $stream->stats;
 
             expect($stats->rowCount)->toBe($totalRows)
                 ->and($stats->duration)->toBeGreaterThan(0.0)
@@ -258,7 +258,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                $stats = $stream->getStats();
+                $stats = $stream->stats;
 
                 expect($stats->rowCount)->toBe(100000)
                     ->and($stats->columnCount)->toBe(4) // id, uuid, description, created_at
@@ -275,7 +275,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                $stats = $stream->getStats();
+                $stats = $stream->stats;
 
                 expect($stats->duration)->toBeGreaterThan(0.0);
 
@@ -290,7 +290,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                $stats = $stream->getStats();
+                $stats = $stream->stats;
 
                 expect($stats->warningCount)->toBe(0);
 
@@ -305,7 +305,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->getStats()->hasRows())->toBeTrue();
+                expect($stream->stats->hasRows())->toBeTrue();
 
                 $conn->close();
             });
@@ -320,7 +320,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->getStats()->hasRows())->toBeFalse();
+                expect($stream->stats->hasRows())->toBeFalse();
 
                 $conn->close();
             });
@@ -333,7 +333,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                $stats = $stream->getStats();
+                $stats = $stream->stats;
 
                 expect($stats->getRowsPerSecond())->toBeGreaterThan(0.0);
 
@@ -350,7 +350,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->getStats()->getRowsPerSecond())->toBe(0.0);
+                expect($stream->stats->getRowsPerSecond())->toBe(0.0);
 
                 $conn->close();
             });
@@ -363,7 +363,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                $stats = $stream->getStats();
+                $stats = $stream->stats;
                 $expected = $stats->rowCount / $stats->duration;
 
                 expect($stats->getRowsPerSecond())->toBe($expected);
@@ -383,7 +383,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                $stats = $stream->getStats();
+                $stats = $stream->stats;
 
                 expect($stats->rowCount)->toBe(100000)
                     ->and($stats->columnCount)->toBe(4)
@@ -402,7 +402,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->getStats()->duration)->toBeGreaterThan(0.0);
+                expect($stream->stats->duration)->toBeGreaterThan(0.0);
 
                 await($stmt->close());
                 $conn->close();
@@ -417,7 +417,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->getStats()->warningCount)->toBe(0);
+                expect($stream->stats->warningCount)->toBe(0);
 
                 await($stmt->close());
                 $conn->close();
@@ -432,7 +432,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->getStats()->hasRows())->toBeTrue();
+                expect($stream->stats->hasRows())->toBeTrue();
 
                 await($stmt->close());
                 $conn->close();
@@ -449,7 +449,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->getStats()->hasRows())->toBeFalse();
+                expect($stream->stats->hasRows())->toBeFalse();
 
                 await($stmt->close());
                 $conn->close();
@@ -464,7 +464,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->getStats()->getRowsPerSecond())->toBeGreaterThan(0.0);
+                expect($stream->stats->getRowsPerSecond())->toBeGreaterThan(0.0);
 
                 await($stmt->close());
                 $conn->close();
@@ -481,7 +481,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->getStats()->getRowsPerSecond())->toBe(0.0);
+                expect($stream->stats->getRowsPerSecond())->toBe(0.0);
 
                 await($stmt->close());
                 $conn->close();
@@ -496,7 +496,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                $stats = $stream->getStats();
+                $stats = $stream->stats;
                 $expected = $stats->rowCount / $stats->duration;
 
                 expect($stats->getRowsPerSecond())->toBe($expected);

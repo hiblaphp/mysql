@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use function Hibla\async;
-use function Hibla\await;
-
 use Hibla\Mysql\Exceptions\NotInitializedException;
 use Hibla\Mysql\Exceptions\PoolException;
 use Hibla\Promise\Promise;
+
+use function Hibla\async;
+use function Hibla\await;
 
 describe('MysqlClient::closeAsync()', function (): void {
     it('resolves immediately when pool is idle', function (): void {
@@ -30,7 +30,8 @@ describe('MysqlClient::closeAsync()', function (): void {
         $queryPromise = $client->query('SELECT SLEEP(1)')
             ->then(function () use (&$queryFinished): void {
                 $queryFinished = true;
-            });
+            })
+        ;
 
         $shutdownPromise = $client->closeAsync();
 
@@ -47,11 +48,12 @@ describe('MysqlClient::closeAsync()', function (): void {
         $rejected = false;
 
         $lateQuery = $client->query('SELECT 1')
-            ->catch(function (\Throwable $e) use (&$rejected): void {
+            ->catch(function (Throwable $e) use (&$rejected): void {
                 if ($e instanceof PoolException || $e instanceof NotInitializedException) {
                     $rejected = true;
                 }
-            });
+            })
+        ;
 
         await(Promise::all([$shutdownPromise, $lateQuery]));
 
@@ -82,7 +84,8 @@ describe('MysqlClient::closeAsync()', function (): void {
         $client->query('SELECT SLEEP(5)')
             ->catch(function (): void {
                 // Expected — connection will be force-closed.
-            });
+            })
+        ;
 
         $shutdownResolved = false;
 
@@ -103,7 +106,8 @@ describe('MysqlClient::closeAsync()', function (): void {
         $client->query('SELECT SLEEP(5)')
             ->catch(function (): void {
                 // Expected — killed by force close on timeout.
-            });
+            })
+        ;
 
         $start = microtime(true);
 
@@ -137,7 +141,8 @@ describe('MysqlClient::closeAsync()', function (): void {
             $queries[] = $client->query('SELECT SLEEP(1)')
                 ->then(function () use (&$finishedCount): void {
                     $finishedCount++;
-                });
+                })
+            ;
         }
 
         $shutdownPromise = $client->closeAsync();
@@ -212,7 +217,7 @@ describe('MysqlClient::closeAsync()', function (): void {
 
         $txPromise = $client->transaction(function ($tx) use (&$txCommitted, $txStarted) {
             return async(function () use ($tx, &$txCommitted, $txStarted) {
-                // Signal to the outside world that the transaction has successfully 
+                // Signal to the outside world that the transaction has successfully
                 // borrowed a connection and is now "active"
                 $txStarted->resolve(true);
 

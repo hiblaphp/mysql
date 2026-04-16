@@ -6,9 +6,9 @@ namespace Hibla\Mysql\Manager;
 
 use Hibla\EventLoop\Loop;
 use Hibla\Mysql\Exceptions\PoolException;
+use Hibla\Mysql\Interfaces\ConnectionSetup as ConnectionSetupInterface;
 use Hibla\Mysql\Internals\Connection as MysqlConnection;
 use Hibla\Mysql\Internals\ConnectionSetup;
-use Hibla\Mysql\Interfaces\ConnectionSetup as ConnectionSetupInterface;
 use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Promise\Exceptions\TimeoutException;
 use Hibla\Promise\Interfaces\PromiseInterface;
@@ -203,8 +203,8 @@ class PoolManager
      *                                                from $config is used.
      * @param ConnectorInterface|null $connector Optional custom socket connector.
      * @param (callable(ConnectionSetupInterface): (PromiseInterface<mixed>|void))|null $onConnect
-     *        Optional hook invoked once per physical connection immediately after the MySQL
-     *        handshake completes.
+     *                                                                                             Optional hook invoked once per physical connection immediately after the MySQL
+     *                                                                                             handshake completes.
      */
     public function __construct(
         MysqlConfig|array|string $config,
@@ -283,6 +283,34 @@ class PoolManager
     }
 
     /**
+     * Retrieves statistics about the current state of the connection pool.
+     *
+     * @return array<string, mixed> An associative array with pool metrics.
+     */
+    public array $stats {
+        get {
+            return [
+                'active_connections' => $this->activeConnections,
+                'pooled_connections' => $this->pool->count(),
+                'min_size' => $this->minSize,
+                'waiting_requests' => $this->pendingWaiters,
+                'draining_connections' => \count($this->drainingConnections),
+                'max_size' => $this->maxSize,
+                'max_waiters' => $this->maxWaiters,
+                'acquire_timeout' => $this->acquireTimeout,
+                'config_validated' => $this->configValidated,
+                'tracked_connections' => \count($this->connectionCreatedAt),
+                'query_cancellation_enabled' => $this->MysqlConfig->enableServerSideCancellation,
+                'compression_enabled' => $this->MysqlConfig->compress,
+                'reset_connection_enabled' => $this->MysqlConfig->resetConnection,
+                'multi_statements_enabled' => $this->MysqlConfig->multiStatements,
+                'on_connect_hook' => $this->onConnect !== null,
+                'is_graceful_shutdown' => $this->isGracefulShutdown,
+            ];
+        }
+    }
+
+    /**
      * Asynchronously acquires a connection from the pool.
      *
      * Rejects immediately if the pool is shutting down (either gracefully or
@@ -296,11 +324,11 @@ class PoolManager
      * If no idle connection is available and the pool is not at capacity,
      * a new connection is created. Otherwise the caller is queued as a waiter.
      *
-     *   
+     *
      * Waiter promises support cancellation and timeouts:
      * - If cancelled before connection acquisition, it is skipped.
      * - If acquireTimeout is set and exceeded, the promise rejects with TimeoutException.
-     * 
+     *
      * @return PromiseInterface<MysqlConnection>
      */
     public function get(): PromiseInterface
@@ -359,7 +387,6 @@ class PoolManager
         // At capacity — enqueue a waiter.
         /** @var Promise<MysqlConnection> $waiterPromise */
         $waiterPromise = new Promise();
-
 
         if ($this->acquireTimeout > 0.0) {
             $timerId = Loop::addTimer($this->acquireTimeout, function () use ($waiterPromise): void {
@@ -437,33 +464,6 @@ class PoolManager
     }
 
     /**
-     * Retrieves statistics about the current state of the connection pool.
-     *
-     * @return array<string, mixed> An associative array with pool metrics.
-     */
-    public function getStats(): array
-    {
-        return [
-            'active_connections'          => $this->activeConnections,
-            'pooled_connections'          => $this->pool->count(),
-            'min_size'                    => $this->minSize,
-            'waiting_requests'            => $this->pendingWaiters,
-            'draining_connections'        => \count($this->drainingConnections),
-            'max_size'                    => $this->maxSize,
-            'max_waiters'                 => $this->maxWaiters,
-            'acquire_timeout'             => $this->acquireTimeout,
-            'config_validated'            => $this->configValidated,
-            'tracked_connections'         => \count($this->connectionCreatedAt),
-            'query_cancellation_enabled'  => $this->MysqlConfig->enableServerSideCancellation,
-            'compression_enabled'         => $this->MysqlConfig->compress,
-            'reset_connection_enabled'    => $this->MysqlConfig->resetConnection,
-            'multi_statements_enabled'    => $this->MysqlConfig->multiStatements,
-            'on_connect_hook'             => $this->onConnect !== null,
-            'is_graceful_shutdown'        => $this->isGracefulShutdown,
-        ];
-    }
-
-    /**
      * Initiates a graceful shutdown of the pool.
      *
      * Graceful shutdown proceeds in this order:
@@ -475,12 +475,14 @@ class PoolManager
      *
      * @param float $timeout Maximum seconds to wait for graceful drain before
      *                       falling back to force close(). 0.0 means no timeout.
+     *
      * @return PromiseInterface<void>
      */
     public function closeAsync(float $timeout = 0.0): PromiseInterface
     {
         if ($this->isClosing) {
             $resolved = Promise::resolved();
+
             return $resolved;
         }
 
@@ -490,15 +492,16 @@ class PoolManager
             }
 
             $resolved = Promise::resolved();
+
             return $resolved;
         }
 
         $this->isGracefulShutdown = true;
 
-        while (!$this->pool->isEmpty()) {
+        while (! $this->pool->isEmpty()) {
             $connection = $this->pool->dequeue();
 
-            if (!$connection->isClosed()) {
+            if (! $connection->isClosed()) {
                 $connection->close();
             }
 
@@ -528,7 +531,8 @@ class PoolManager
 
             $pendingShutdown->finally(function () use ($timerId): void {
                 Loop::cancelTimer($timerId);
-            })->catch(static function (): void {});
+            })->catch(static function (): void {
+            });
         }
 
         if ($this->shutdownPromise !== null) {
@@ -536,9 +540,9 @@ class PoolManager
         }
 
         $resolved = Promise::resolved();
+
         return $resolved;
     }
-
 
     /**
      * Force-closes all connections in all states (idle, draining, active)
@@ -618,8 +622,8 @@ class PoolManager
 
         $stats = [
             'total_checked' => 0,
-            'healthy'       => 0,
-            'unhealthy'     => 0,
+            'healthy' => 0,
+            'unhealthy' => 0,
         ];
 
         /** @var SplQueue<MysqlConnection> $tempQueue */
@@ -647,7 +651,8 @@ class PoolManager
                         $stats['unhealthy']++;
                         $this->removeConnection($connection);
                     }
-                );
+                )
+            ;
         }
 
         Promise::all($checkPromises)
@@ -678,7 +683,8 @@ class PoolManager
 
                     $promise->reject($e);
                 }
-            );
+            )
+        ;
 
         return $promise;
     }
@@ -703,7 +709,7 @@ class PoolManager
             return;
         }
 
-        // If we ran out of active connections but still have waiters, they will 
+        // If we ran out of active connections but still have waiters, they will
         // never be served (because we don't spawn new connections during shutdown).
         // Reject them so they don't hang indefinitely.
         if ($this->activeConnections === 0 && ! $this->waiters->isEmpty()) {
@@ -748,8 +754,9 @@ class PoolManager
 
         $setup = new ConnectionSetup($connection);
 
-        return async(fn() => ($this->onConnect)($setup))
-            ->then(fn() => $connection);
+        return async(fn () => ($this->onConnect)($setup))
+            ->then(fn () => $connection)
+        ;
     }
 
     /**
@@ -825,7 +832,8 @@ class PoolManager
                         $this->releaseClean($connection);
                     }
                 }
-            );
+            )
+        ;
     }
 
     /**
@@ -868,7 +876,7 @@ class PoolManager
                 // initial handshake. The hook must restore it for the same reason
                 // it ran at connect time.
                 $this->runOnConnectHook($connection)->then(
-                    fn() => $this->releaseClean($connection),
+                    fn () => $this->releaseClean($connection),
                     function (Throwable $e) use ($connection): void {
                         // Hook failed after reset — unknown session state, drop it.
                         $this->removeConnection($connection);
@@ -905,6 +913,7 @@ class PoolManager
         if ($waiter !== null) {
             $connection->resume();
             $waiter->resolve($connection);
+
             return;
         }
 
@@ -912,6 +921,7 @@ class PoolManager
         if ($this->isGracefulShutdown) {
             unset($this->activeConnectionsMap[$connId]);
             $this->removeConnection($connection);
+
             return;
         }
 
@@ -923,6 +933,7 @@ class PoolManager
 
         if (($now - $createdAt) > $this->maxLifetimeNanos) {
             $this->removeConnection($connection);
+
             return;
         }
 
@@ -957,6 +968,7 @@ class PoolManager
                         // If a shutdown started while we were connecting, drop it immediately
                         if ($this->isClosing || $this->isGracefulShutdown) {
                             $this->removeConnection($connection);
+
                             return;
                         }
 
@@ -996,7 +1008,7 @@ class PoolManager
                     $this->activeConnectionsMap[$connId] = $connection;
 
                     $this->runOnConnectHook($connection)->then(
-                        fn() => $promise->resolve($connection),
+                        fn () => $promise->resolve($connection),
                         function (Throwable $e) use ($promise, $connection): void {
                             // Hook failed — drop the connection so the pool never
                             // hands out a connection in an unknown session state.
@@ -1010,7 +1022,8 @@ class PoolManager
                     $promise->reject($e);
                     $this->checkShutdownComplete();
                 }
-            );
+            )
+        ;
 
         return $promise;
     }
@@ -1060,7 +1073,8 @@ class PoolManager
                     $waiter->reject($e);
                     $this->checkShutdownComplete();
                 }
-            );
+            )
+        ;
     }
 
     /**

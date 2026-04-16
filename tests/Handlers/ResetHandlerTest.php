@@ -92,7 +92,8 @@ describe('ResetHandler', function () {
 
         expect($errorMessage)
             ->toContain('MySQL Reset Connection Error')
-            ->and($errorMessage)->toContain('Server shutdown in progress');
+            ->and($errorMessage)->toContain('Server shutdown in progress')
+        ;
     });
 
     it('rejects promise on unexpected packet type', function () {
@@ -173,6 +174,7 @@ describe('ResetHandler', function () {
             ->toBeInstanceOf(\Hibla\Sql\Exceptions\ConnectionException::class)
             ->and($caughtException->getMessage())->toContain('Failed to process reset response')
             ->and($caughtException->getMessage())->toContain('Raw runtime error')
-            ->and($caughtException->getCode())->toBe(42);
+            ->and($caughtException->getCode())->toBe(42)
+        ;
     });
 });

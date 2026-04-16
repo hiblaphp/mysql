@@ -39,6 +39,7 @@ class ManagedPreparedStatement implements PreparedStatementInterface
      * {@inheritdoc}
      *
      * @return PromiseInterface<MysqlResult>
+     *
      * @throws PreparedException If the statement is closed
      * @throws \InvalidArgumentException If parameter count doesn't match
      */
@@ -54,6 +55,7 @@ class ManagedPreparedStatement implements PreparedStatementInterface
      * {@inheritdoc}
      *
      * @return PromiseInterface<MysqlRowStream>
+     *
      * @throws PreparedException If the statement is closed
      * @throws \InvalidArgumentException If parameter count doesn't match
      */
@@ -99,7 +101,9 @@ class ManagedPreparedStatement implements PreparedStatementInterface
      * KILL QUERY on the server.
      *
      * @template T
+     *
      * @param PromiseInterface<T> $promise
+     *
      * @return PromiseInterface<T>
      */
     private function withCancellation(PromiseInterface $promise): PromiseInterface

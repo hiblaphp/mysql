@@ -10,6 +10,7 @@ use Hibla\Mysql\Internals\PreparedStatement;
  * Context for streaming prepared statement execution.
  *
  * @internal
+ *
  * @package Hibla\Mysql\ValueObjects
  */
 final readonly class ExecuteStreamContext

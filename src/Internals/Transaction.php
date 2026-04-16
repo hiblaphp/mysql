@@ -23,16 +23,17 @@ use Hibla\Sql\Transaction as TransactionInterface;
 class Transaction implements TransactionInterface
 {
     /**
-     *  @var list<callable(): void>
+     * @var list<callable(): void>
      */
     private array $onCommitCallbacks = [];
 
     /**
-     *  @var list<callable(): void>
+     * @var list<callable(): void>
      */
     private array $onRollbackCallbacks = [];
 
     private bool $active = true;
+
     private bool $released = false;
 
     /**
@@ -49,7 +50,8 @@ class Transaction implements TransactionInterface
         private readonly Connection $connection,
         private readonly PoolManager $pool,
         private readonly ?ArrayCache $statementCache = null
-    ) {}
+    ) {
+    }
 
     /**
      * {@inheritdoc}
@@ -78,7 +80,8 @@ class Transaction implements TransactionInterface
                             }
                         })
                     ;
-                });
+                })
+            ;
         }
 
         return $this->withCancellation($this->trackErrorState($promise));
@@ -93,6 +96,7 @@ class Transaction implements TransactionInterface
      * @param string $sql SQL query to stream
      * @param array<int|string, mixed> $params Query parameters (optional)
      * @param int $bufferSize Maximum rows to buffer before applying backpressure (default: 100)
+     *
      * @return PromiseInterface<MysqlRowStream>
      */
     public function stream(string $sql, array $params = [], int $bufferSize = 100): PromiseInterface
@@ -118,7 +122,8 @@ class Transaction implements TransactionInterface
                             return $stream;
                         })
                     ;
-                });
+                })
+            ;
         }
 
         return $this->withCancellation($this->trackErrorState($promise));
@@ -131,7 +136,7 @@ class Transaction implements TransactionInterface
     {
         return $this->withCancellation(
             $this->query($sql, $params)
-                ->then(fn(ResultInterface $result) => $result->getAffectedRows())
+                ->then(fn (ResultInterface $result) => $result->affectedRows)
         );
     }
 
@@ -142,7 +147,7 @@ class Transaction implements TransactionInterface
     {
         return $this->withCancellation(
             $this->query($sql, $params)
-                ->then(fn(ResultInterface $result) => $result->getLastInsertId())
+                ->then(fn (ResultInterface $result) => $result->lastInsertId)
         );
     }
 
@@ -153,7 +158,7 @@ class Transaction implements TransactionInterface
     {
         return $this->withCancellation(
             $this->query($sql, $params)
-                ->then(fn(ResultInterface $result) => $result->fetchOne())
+                ->then(fn (ResultInterface $result) => $result->fetchOne())
         );
     }
 
@@ -173,6 +178,7 @@ class Transaction implements TransactionInterface
 
                     if ($column === null) {
                         $value = reset($row);
+
                         return $value !== false ? $value : null;
                     }
 
@@ -258,7 +264,8 @@ class Transaction implements TransactionInterface
                         $e
                     );
                 }
-            );
+            )
+        ;
     }
 
     /**
@@ -390,7 +397,9 @@ class Transaction implements TransactionInterface
      * Bridges cancel() → cancelChain() on a public-facing promise.
      *
      * @template T
+     *
      * @param PromiseInterface<T> $promise
+     *
      * @return PromiseInterface<T>
      */
     private function withCancellation(PromiseInterface $promise): PromiseInterface
@@ -404,7 +413,9 @@ class Transaction implements TransactionInterface
      * Tracks the state of the promise. If it rejects, the transaction is marked as failed.
      *
      * @template T
+     *
      * @param PromiseInterface<T> $promise
+     *
      * @return PromiseInterface<T>
      */
     private function trackErrorState(PromiseInterface $promise): PromiseInterface
@@ -425,7 +436,7 @@ class Transaction implements TransactionInterface
     private function getCachedStatement(string $sql): PromiseInterface
     {
         if ($this->statementCache === null) {
-            return $this->connection->prepare($sql)->then(fn($stmt) => [$stmt, false]);
+            return $this->connection->prepare($sql)->then(fn ($stmt) => [$stmt, false]);
         }
 
         return $this->statementCache->get($sql)->then(function (mixed $stmt) use ($sql) {

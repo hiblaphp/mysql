@@ -26,9 +26,8 @@ class StreamStats
     /**
      * Get the average rows per second.
      */
-    public function getRowsPerSecond(): float
-    {
-        return $this->duration > 0 ? $this->rowCount / $this->duration : 0.0;
+    public float $rowsPerSecond {
+        get => $this->duration > 0 ? $this->rowCount / $this->duration : 0.0;
     }
 
     /**

@@ -70,8 +70,8 @@ describe('ExecuteHandler', function () {
         Loop::run();
 
         expect($result)->toBeInstanceOf(Result::class)
-            ->and($result->getAffectedRows())->toBe(1)
-            ->and($result->getLastInsertId())->toBe(456)
+            ->and($result->affectedRows)->toBe(1)
+            ->and($result->lastInsertId)->toBe(456)
         ;
     });
 
@@ -136,15 +136,15 @@ describe('ExecuteHandler', function () {
         $headerReader->shouldReceive('readFixedInteger')->with(1)->andReturn(1);
         $headerReader->shouldReceive('readLengthEncodedIntegerOrNull')->andReturn(1);
         $handler->processPacket($headerReader, 1, 0);
-        
+
         $okReader = Mockery::mock(PayloadReader::class);
         $okReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x00);
-     
+
         $okReader->shouldReceive('readFixedString')->with(1)->andReturn("\0"); // No nulls
-        
+
         // Parse Column Value (LONG).
         $okReader->shouldReceive('readFixedInteger')->with(4)->andReturn(100);
-        
+
         $handler->processPacket($okReader, 6, 1);
 
         $eofReader = Mockery::mock(PayloadReader::class);
@@ -160,7 +160,7 @@ describe('ExecuteHandler', function () {
         Loop::run();
 
         expect($result)->toBeInstanceOf(Result::class)
-            ->and($result->rowCount())->toBe(1)
+            ->and($result->rowCount)->toBe(1)
             ->and($result->fetchOne()['id'])->toBe(100)
         ;
     });
@@ -206,7 +206,7 @@ describe('ExecuteHandler', function () {
         $rowReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x00);
         $rowReader->shouldReceive('readFixedString')->with(1)->andReturn("\0"); // Null bitmap
         $rowReader->shouldReceive('readLengthEncodedStringOrNull')->andReturn('Hibla'); // Value
-        
+
         $handler->processPacket($rowReader, 10, 1);
 
         $eofReader = Mockery::mock(PayloadReader::class);

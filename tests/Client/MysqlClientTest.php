@@ -2,20 +2,19 @@
 
 declare(strict_types=1);
 
-use function Hibla\asyncFn;
-use function Hibla\await;
-
 use Hibla\Mysql\Exceptions\ConfigurationException;
 use Hibla\Mysql\Exceptions\NotInitializedException;
 use Hibla\Mysql\Exceptions\PoolException;
 use Hibla\Mysql\Interfaces\ConnectionSetup;
 use Hibla\Mysql\Internals\ManagedPreparedStatement;
-
 use Hibla\Mysql\MysqlClient;
 use Hibla\Promise\Exceptions\TimeoutException;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use Hibla\Sql\Exceptions\QueryException;
+
+use function Hibla\asyncFn;
+use function Hibla\await;
 
 beforeAll(function (): void {
     $client = makeClient();
@@ -45,7 +44,7 @@ describe('MysqlClient', function (): void {
         it('creates a client with a MysqlConfig instance', function (): void {
             $client = new MysqlClient(testMysqlConfig());
 
-            expect($client->getStats()['statement_cache_enabled'])->toBeTrue();
+            expect($client->stats['statement_cache_enabled'])->toBeTrue();
 
             $client->close();
         });
@@ -59,7 +58,7 @@ describe('MysqlClient', function (): void {
                 'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
             ]);
 
-            expect($client->getStats()['max_size'])->toBe(10);
+            expect($client->stats['max_size'])->toBe(10);
 
             $client->close();
         });
@@ -75,29 +74,32 @@ describe('MysqlClient', function (): void {
                 "mysql://{$username}:{$password}@{$host}:{$port}/{$database}"
             );
 
-            expect($client->getStats()['max_size'])->toBe(10);
+            expect($client->stats['max_size'])->toBe(10);
 
             $client->close();
         });
 
         it('throws ConfigurationException for invalid maxConnections', function (): void {
-            expect(fn() => makeClient(maxConnections: 0))
-                ->toThrow(ConfigurationException::class);
+            expect(fn () => makeClient(maxConnections: 0))
+                ->toThrow(ConfigurationException::class)
+            ;
         });
 
         it('throws ConfigurationException for invalid idleTimeout', function (): void {
-            expect(fn() => makeClient(idleTimeout: 0))
-                ->toThrow(ConfigurationException::class);
+            expect(fn () => makeClient(idleTimeout: 0))
+                ->toThrow(ConfigurationException::class)
+            ;
         });
 
         it('throws ConfigurationException for invalid maxLifetime', function (): void {
-            expect(fn() => makeClient(maxLifetime: 0))
-                ->toThrow(ConfigurationException::class);
+            expect(fn () => makeClient(maxLifetime: 0))
+                ->toThrow(ConfigurationException::class)
+            ;
         });
 
         it('creates a client with statement cache disabled', function (): void {
             $client = makeClient(enableStatementCache: false);
-            $stats = $client->getStats();
+            $stats = $client->stats;
 
             expect($stats['statement_cache_enabled'])->toBeFalse();
 
@@ -109,7 +111,7 @@ describe('MysqlClient', function (): void {
 
         it('returns correct default stats before any query', function (): void {
             $client = makeClient(maxConnections: 3, statementCacheSize: 128);
-            $stats = $client->getStats();
+            $stats = $client->stats;
 
             expect($stats['max_size'])->toBe(3)
                 ->and($stats['active_connections'])->toBe(0)
@@ -124,7 +126,7 @@ describe('MysqlClient', function (): void {
 
         it('reflects statement cache disabled in stats', function (): void {
             $client = makeClient(enableStatementCache: false);
-            $stats = $client->getStats();
+            $stats = $client->stats;
 
             expect($stats['statement_cache_enabled'])->toBeFalse();
 
@@ -198,7 +200,7 @@ describe('MysqlClient', function (): void {
 
             // If connection was not released the second query would deadlock.
             // Verify it's sitting idle in the pool now.
-            expect($client->getStats()['pooled_connections'])->toBe(1);
+            expect($client->stats['pooled_connections'])->toBe(1);
 
             $client->close();
         });
@@ -489,7 +491,7 @@ describe('MysqlClient', function (): void {
                 // consume
             }
 
-            expect($stream->getStats()->rowCount)->toBe(3);
+            expect($stream->stats->rowCount)->toBe(3);
 
             $client->close();
         });
@@ -613,8 +615,9 @@ describe('MysqlClient', function (): void {
             $client = makeClient();
             $client->close();
 
-            expect(fn() => await($client->query('SELECT 1')))
-                ->toThrow(NotInitializedException::class);
+            expect(fn () => await($client->query('SELECT 1')))
+                ->toThrow(NotInitializedException::class)
+            ;
         });
 
         it('is safe to call close() multiple times', function (): void {
@@ -673,7 +676,7 @@ describe('MysqlClient', function (): void {
 
             await($client->query('SELECT 1'));
 
-            $stats = $client->getStats();
+            $stats = $client->stats;
 
             expect($stats['compression_enabled'])->toBeTrue();
 
@@ -685,7 +688,7 @@ describe('MysqlClient', function (): void {
 
             await($client->query('SELECT 1'));
 
-            $stats = $client->getStats();
+            $stats = $client->stats;
 
             expect($stats['compression_enabled'])->toBeFalse();
 
@@ -756,7 +759,7 @@ describe('MysqlClient', function (): void {
 
             $result = await($client->query("SHOW VARIABLES LIKE '%buffer%'"));
 
-            expect($result->rowCount())->toBeGreaterThanOrEqual(1);
+            expect($result->rowCount)->toBeGreaterThanOrEqual(1);
 
             $client->close();
         });
@@ -787,7 +790,7 @@ describe('MysqlClient', function (): void {
             await($client->query('SELECT 2'));
 
             // Second query would deadlock if connection was not returned to the pool
-            expect($client->getStats()['pooled_connections'])->toBe(1);
+            expect($client->stats['pooled_connections'])->toBe(1);
 
             $client->close();
         });
@@ -826,7 +829,7 @@ describe('MysqlClient', function (): void {
             $client = makeClient();
             await($client->query('SELECT 1'));
 
-            expect($client->getStats()['pooled_connections'])->toBeGreaterThanOrEqual(1);
+            expect($client->stats['pooled_connections'])->toBeGreaterThanOrEqual(1);
 
             unset($client);
 
@@ -837,8 +840,9 @@ describe('MysqlClient', function (): void {
             $client = makeClient();
             $client->close();
 
-            expect(fn() => $client->getStats())
-                ->toThrow(NotInitializedException::class);
+            expect(fn () => $client->stats)
+                ->toThrow(NotInitializedException::class)
+            ;
         });
     });
 
@@ -942,14 +946,14 @@ describe('MysqlClient', function (): void {
             $maxWaiters = 3;
             $client = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
 
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
 
             for ($i = 0; $i < $maxWaiters; $i++) {
-                $client->query('SELECT 1')->catch(fn() => null);
+                $client->query('SELECT 1')->catch(fn () => null);
             }
 
-            expect(fn() => await($client->query("SELECT 'overflow'")))->toThrow(PoolException::class);
+            expect(fn () => await($client->query("SELECT 'overflow'")))->toThrow(PoolException::class);
 
             $client->close();
         });
@@ -958,15 +962,14 @@ describe('MysqlClient', function (): void {
             $maxWaiters = 5;
             $client = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
 
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
-
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
 
             for ($i = 0; $i < $maxWaiters; $i++) {
                 $client->query('SELECT 1');
             }
 
-            expect($client->getStats()['waiting_requests'])->toBe($maxWaiters);
+            expect($client->stats['waiting_requests'])->toBe($maxWaiters);
 
             $client->close();
         });
@@ -975,14 +978,14 @@ describe('MysqlClient', function (): void {
             $maxWaiters = 5;
             $client = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
 
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
 
             for ($i = 0; $i < $maxWaiters - 1; $i++) {
                 $client->query('SELECT 1');
             }
 
-            expect($client->getStats()['waiting_requests'])->toBe($maxWaiters - 1);
+            expect($client->stats['waiting_requests'])->toBe($maxWaiters - 1);
 
             $client->close();
         });
@@ -1012,7 +1015,7 @@ describe('MysqlClient', function (): void {
                 $queued[] = $client->query('SELECT ? AS val', [1]);
             }
 
-            expect(fn() => await($client->query("SELECT 'overflow'")))->toThrow(PoolException::class);
+            expect(fn () => await($client->query("SELECT 'overflow'")))->toThrow(PoolException::class);
 
             await($slow);
 
@@ -1053,6 +1056,7 @@ describe('MysqlClient', function (): void {
             $queued = $client->query('SELECT 1');
 
             $exception = null;
+
             try {
                 await($client->query("SELECT 'overflow'"));
             } catch (PoolException $e) {
@@ -1060,7 +1064,8 @@ describe('MysqlClient', function (): void {
             }
 
             expect($exception)->toBeInstanceOf(PoolException::class)
-                ->and($exception->getMessage())->not->toBeEmpty();
+                ->and($exception->getMessage())->not->toBeEmpty()
+            ;
 
             await($slow1);
             await($slow2);
@@ -1077,7 +1082,7 @@ describe('MysqlClient', function (): void {
 
             $hog = $client->query('DO SLEEP(3)');
 
-            expect(fn() => await($client->query("SELECT 'victim'")))->toThrow(TimeoutException::class);
+            expect(fn () => await($client->query("SELECT 'victim'")))->toThrow(TimeoutException::class);
 
             await($hog);
             $client->close();
@@ -1089,6 +1094,7 @@ describe('MysqlClient', function (): void {
             $hog = $client->query('DO SLEEP(3)');
 
             $start = microtime(true);
+
             try {
                 await($client->query("SELECT 'victim'"));
             } catch (TimeoutException) {
@@ -1132,7 +1138,7 @@ describe('MysqlClient', function (): void {
                 // expected
             }
 
-            expect($client->getStats()['waiting_requests'])->toBe(0);
+            expect($client->stats['waiting_requests'])->toBe(0);
 
             await($hog);
 
@@ -1187,7 +1193,7 @@ describe('MysqlClient', function (): void {
 
             expect($result1->fetchOne()['val'])->toBe(1)
                 ->and($result2->fetchOne()['val'])->toBe(2)
-                ->and($client->getStats()['waiting_requests'])->toBe(0)
+                ->and($client->stats['waiting_requests'])->toBe(0)
             ;
 
             $client->close();
@@ -1199,8 +1205,9 @@ describe('MysqlClient', function (): void {
         it('rejects stacked queries when multi_statements is disabled by default', function (): void {
             $client = makeClient();
 
-            expect(fn() => await($client->query('SELECT 1; SELECT 2')))
-                ->toThrow(QueryException::class);
+            expect(fn () => await($client->query('SELECT 1; SELECT 2')))
+                ->toThrow(QueryException::class)
+            ;
 
             $client->close();
         });
@@ -1209,6 +1216,7 @@ describe('MysqlClient', function (): void {
             $client = makeClient();
 
             $exception = null;
+
             try {
                 await($client->query('SELECT 1; SELECT 2'));
             } catch (QueryException $e) {
@@ -1216,7 +1224,8 @@ describe('MysqlClient', function (): void {
             }
 
             expect($exception)->toBeInstanceOf(QueryException::class)
-                ->and($exception->getCode())->toBe(1064);
+                ->and($exception->getCode())->toBe(1064)
+            ;
 
             $client->close();
         });
@@ -1238,7 +1247,8 @@ describe('MysqlClient', function (): void {
             $result2 = $result1->nextResult();
 
             expect($result2)->not->toBeNull()
-                ->and($result2->fetchOne()['b'])->toBe('200');
+                ->and($result2->fetchOne()['b'])->toBe('200')
+            ;
 
             $client->close();
         });
@@ -1264,7 +1274,8 @@ describe('MysqlClient', function (): void {
                 ->and($result2)->not->toBeNull()
                 ->and($result2->fetchOne()['n'])->toBe('2')
                 ->and($result3)->not->toBeNull()
-                ->and($result3->fetchOne()['n'])->toBe('3');
+                ->and($result3->fetchOne()['n'])->toBe('3')
+            ;
 
             $client->close();
         });
@@ -1275,7 +1286,7 @@ describe('MysqlClient', function (): void {
             await($client->query('SELECT 1; SELECT 2'));
             await($client->query('SELECT 3; SELECT 4'));
 
-            expect($client->getStats()['pooled_connections'])->toBe(1);
+            expect($client->stats['pooled_connections'])->toBe(1);
 
             $client->close();
         });
@@ -1301,14 +1312,16 @@ describe('MysqlClient', function (): void {
             $client = makeOnConnectClient(
                 onConnect: function (ConnectionSetup $conn) use (&$hookCallCount): PromiseInterface {
                     $hookCallCount++;
+
                     return $conn->execute("SET SESSION time_zone = '+05:30'");
                 }
             );
 
-            $tz = await($client->fetchValue("SELECT @@session.time_zone"));
+            $tz = await($client->fetchValue('SELECT @@session.time_zone'));
 
             expect($hookCallCount)->toBe(1)
-                ->and($tz)->toBe('+05:30');
+                ->and($tz)->toBe('+05:30')
+            ;
 
             $client->close();
         });
@@ -1319,12 +1332,13 @@ describe('MysqlClient', function (): void {
             $client = makeOnConnectClient(
                 onConnect: function (ConnectionSetup $conn) use (&$hookCallCount): PromiseInterface {
                     $hookCallCount++;
+
                     return $conn->execute("SET SESSION time_zone = '+05:30'");
                 }
             );
 
-            await($client->fetchValue("SELECT @@session.time_zone"));
-            await($client->fetchValue("SELECT @@session.time_zone"));
+            await($client->fetchValue('SELECT @@session.time_zone'));
+            await($client->fetchValue('SELECT @@session.time_zone'));
 
             expect($hookCallCount)->toBe(1);
 
@@ -1333,14 +1347,15 @@ describe('MysqlClient', function (): void {
 
         it('session variable persists across checkouts on the same connection', function (): void {
             $client = makeOnConnectClient(
-                onConnect: fn(ConnectionSetup $conn) => $conn->execute("SET SESSION time_zone = '+05:30'")
+                onConnect: fn (ConnectionSetup $conn) => $conn->execute("SET SESSION time_zone = '+05:30'")
             );
 
-            $tz1 = await($client->fetchValue("SELECT @@session.time_zone"));
-            $tz2 = await($client->fetchValue("SELECT @@session.time_zone"));
+            $tz1 = await($client->fetchValue('SELECT @@session.time_zone'));
+            $tz2 = await($client->fetchValue('SELECT @@session.time_zone'));
 
             expect($tz1)->toBe('+05:30')
-                ->and($tz2)->toBe('+05:30');
+                ->and($tz2)->toBe('+05:30')
+            ;
 
             $client->close();
         });
@@ -1354,11 +1369,12 @@ describe('MysqlClient', function (): void {
                 }
             );
 
-            await($client->fetchValue("SELECT 1"));
+            await($client->fetchValue('SELECT 1'));
 
             expect($receivedClass)
-                ->toBe(\Hibla\Mysql\Internals\ConnectionSetup::class)
-                ->and(is_a($receivedClass, ConnectionSetup::class, true))->toBeTrue();
+                ->toBe(Hibla\Mysql\Internals\ConnectionSetup::class)
+                ->and(is_a($receivedClass, ConnectionSetup::class, true))->toBeTrue()
+            ;
 
             $client->close();
         });
@@ -1371,11 +1387,12 @@ describe('MysqlClient', function (): void {
                     return $conn->execute("SET SESSION time_zone = '+00:00'")
                         ->then(function () use (&$order): void {
                             $order[] = 'hook_done';
-                        });
+                        })
+                    ;
                 }
             );
 
-            await($client->fetchValue("SELECT @@session.time_zone"));
+            await($client->fetchValue('SELECT @@session.time_zone'));
             $order[] = 'query_done';
 
             expect($order)->toBe(['hook_done', 'query_done']);
@@ -1390,25 +1407,27 @@ describe('MysqlClient', function (): void {
                 maxConnections: 3,
                 onConnect: function (ConnectionSetup $conn) use (&$hookCallCount): PromiseInterface {
                     $hookCallCount++;
+
                     return $conn->execute("SET SESSION time_zone = '+09:00'");
                 }
             );
 
             [$tz1, $tz2, $tz3] = await(Promise::all([
-                $client->fetchValue("SELECT @@session.time_zone"),
-                $client->fetchValue("SELECT @@session.time_zone"),
-                $client->fetchValue("SELECT @@session.time_zone"),
+                $client->fetchValue('SELECT @@session.time_zone'),
+                $client->fetchValue('SELECT @@session.time_zone'),
+                $client->fetchValue('SELECT @@session.time_zone'),
             ]));
 
             expect($hookCallCount)->toBe(3)
                 ->and($tz1)->toBe('+09:00')
                 ->and($tz2)->toBe('+09:00')
-                ->and($tz3)->toBe('+09:00');
+                ->and($tz3)->toBe('+09:00')
+            ;
 
             await(Promise::all([
-                $client->fetchValue("SELECT 1"),
-                $client->fetchValue("SELECT 1"),
-                $client->fetchValue("SELECT 1"),
+                $client->fetchValue('SELECT 1'),
+                $client->fetchValue('SELECT 1'),
+                $client->fetchValue('SELECT 1'),
             ]));
 
             expect($hookCallCount)->toBe(3);
@@ -1418,15 +1437,16 @@ describe('MysqlClient', function (): void {
 
         it('rejects the caller and drops the connection when hook fails', function (): void {
             $client = makeOnConnectClient(
-                onConnect: fn(ConnectionSetup $conn) => $conn->execute(
-                    "SET SESSION invalid_var_that_does_not_exist = 1"
+                onConnect: fn (ConnectionSetup $conn) => $conn->execute(
+                    'SET SESSION invalid_var_that_does_not_exist = 1'
                 )
             );
 
-            expect(fn() => await($client->fetchValue("SELECT 1")))
-                ->toThrow(QueryException::class);
+            expect(fn () => await($client->fetchValue('SELECT 1')))
+                ->toThrow(QueryException::class)
+            ;
 
-            expect($client->getStats()['active_connections'])->toBe(0);
+            expect($client->stats['active_connections'])->toBe(0);
 
             $client->close();
         });
@@ -1436,15 +1456,16 @@ describe('MysqlClient', function (): void {
 
             $client = makeOnConnectClient(
                 onConnect: function (ConnectionSetup $conn) use (&$serverVersion): PromiseInterface {
-                    return $conn->query("SELECT VERSION() AS version")
-                        ->then(function (\Hibla\Mysql\Interfaces\MysqlResult $result) use (&$serverVersion): void {
+                    return $conn->query('SELECT VERSION() AS version')
+                        ->then(function (Hibla\Mysql\Interfaces\MysqlResult $result) use (&$serverVersion): void {
                             $row = $result->fetchOne();
                             $serverVersion = $row['version'] ?? null;
-                        });
+                        })
+                    ;
                 }
             );
 
-            await($client->fetchValue("SELECT 1"));
+            await($client->fetchValue('SELECT 1'));
 
             expect($serverVersion)->not->toBeNull();
 
@@ -1454,10 +1475,11 @@ describe('MysqlClient', function (): void {
         it('no hook — normal pool behaviour is unchanged', function (): void {
             $client = makeOnConnectClient();
 
-            $result = await($client->fetchValue("SELECT 42"));
+            $result = await($client->fetchValue('SELECT 42'));
 
             expect((int) $result)->toBe(42)
-                ->and($client->getStats()['on_connect_hook'])->toBeFalse();
+                ->and($client->stats['on_connect_hook'])->toBeFalse()
+            ;
 
             $client->close();
         });
@@ -1469,25 +1491,28 @@ describe('MysqlClient', function (): void {
                 resetConnection: true,
                 onConnect: function (ConnectionSetup $conn) use (&$hookCallCount): PromiseInterface {
                     $hookCallCount++;
+
                     return $conn->execute("SET SESSION time_zone = '+05:30'");
                 }
             );
 
-            $tz1 = await($client->fetchValue("SELECT @@session.time_zone"));
+            $tz1 = await($client->fetchValue('SELECT @@session.time_zone'));
 
             expect($hookCallCount)->toBe(1)
-                ->and($tz1)->toBe('+05:30');
+                ->and($tz1)->toBe('+05:30')
+            ;
 
-
-            $tz2 = await($client->fetchValue("SELECT @@session.time_zone"));
+            $tz2 = await($client->fetchValue('SELECT @@session.time_zone'));
 
             expect($hookCallCount)->toBe(2)
-                ->and($tz2)->toBe('+05:30');
+                ->and($tz2)->toBe('+05:30')
+            ;
 
-            $tz3 = await($client->fetchValue("SELECT @@session.time_zone"));
+            $tz3 = await($client->fetchValue('SELECT @@session.time_zone'));
 
             expect($hookCallCount)->toBe(3)
-                ->and($tz3)->toBe('+05:30');
+                ->and($tz3)->toBe('+05:30')
+            ;
 
             $client->close();
         });
@@ -1503,14 +1528,15 @@ describe('MysqlClient', function (): void {
                 })
             );
 
-            $tz   = await($client->fetchValue("SELECT @@session.time_zone"));
-            $mode = await($client->fetchValue("SELECT @@session.sql_mode"));
+            $tz = await($client->fetchValue('SELECT @@session.time_zone'));
+            $mode = await($client->fetchValue('SELECT @@session.sql_mode'));
 
             expect($hookCallCount)->toBe(1)
                 ->and($tz)->toBe('+05:30')
-                ->and($mode)->toBe('STRICT_ALL_TABLES');
+                ->and($mode)->toBe('STRICT_ALL_TABLES')
+            ;
 
-            await($client->fetchValue("SELECT 1"));
+            await($client->fetchValue('SELECT 1'));
 
             expect($hookCallCount)->toBe(1);
 

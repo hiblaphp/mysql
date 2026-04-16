@@ -70,8 +70,9 @@ describe('QueryHandler', function () {
         Loop::run();
 
         expect($result)->toBeInstanceOf(Result::class)
-            ->and($result->getAffectedRows())->toBe(1)
-            ->and($result->getLastInsertId())->toBe(456);
+            ->and($result->affectedRows)->toBe(1)
+            ->and($result->lastInsertId)->toBe(456)
+        ;
     });
 
     it('rejects promise on ERR packet', function () {
@@ -169,7 +170,8 @@ describe('QueryHandler', function () {
             ->and($result)->toBeInstanceOf(StreamStats::class)
             ->and($result->rowCount)->toBe(1)
             ->and($receivedRows)->toHaveCount(1)
-            ->and($receivedRows[0]['name'])->toBe('Hibla');
+            ->and($receivedRows[0]['name'])->toBe('Hibla')
+        ;
     });
 
     it('calls onComplete callback in streaming mode', function () {
@@ -179,7 +181,8 @@ describe('QueryHandler', function () {
 
         $completeCalled = false;
         $streamContext = new StreamContext(
-            onRow: function (array $row) {},
+            onRow: function (array $row) {
+            },
             onComplete: function (StreamStats $stats) use (&$completeCalled) {
                 $completeCalled = true;
             }
@@ -230,7 +233,8 @@ describe('QueryHandler', function () {
 
         $errorCalled = false;
         $streamContext = new StreamContext(
-            onRow: function (array $row) {},
+            onRow: function (array $row) {
+            },
             onError: function (\Throwable $e) use (&$errorCalled) {
                 $errorCalled = true;
             }
@@ -240,7 +244,8 @@ describe('QueryHandler', function () {
         $handler = new QueryHandler($connection, $commandBuilder);
         /** @var Promise<StreamStats> $promise */
         $promise = new Promise();
-        $promise->catch(function () {});
+        $promise->catch(function () {
+        });
 
         $handler->start('SELECT 1', $promise, $streamContext);
 
@@ -318,7 +323,8 @@ describe('QueryHandler', function () {
         Loop::run();
 
         expect($result)->toBeInstanceOf(Result::class)
-            ->and($result->rowCount())->toBe(2)
-            ->and($result->fetchAll())->toBe([['id' => '1'], ['id' => '2']]);
+            ->and($result->rowCount)->toBe(2)
+            ->and($result->fetchAll())->toBe([['id' => '1'], ['id' => '2']])
+        ;
     });
 });

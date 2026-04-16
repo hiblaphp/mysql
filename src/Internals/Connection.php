@@ -13,8 +13,8 @@ use Hibla\Mysql\Handlers\PrepareHandler;
 use Hibla\Mysql\Handlers\QueryHandler;
 use Hibla\Mysql\Handlers\ResetHandler;
 use Hibla\Mysql\ValueObjects\CommandRequest;
-use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Mysql\ValueObjects\ExecuteStreamContext;
+use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Mysql\ValueObjects\StreamContext;
 use Hibla\Mysql\ValueObjects\StreamStats;
 use Hibla\Promise\Interfaces\PromiseInterface;
@@ -33,7 +33,6 @@ use Rcalicdan\MySQLBinaryProtocol\Packet\PacketReader;
 use Rcalicdan\MySQLBinaryProtocol\Packet\PacketWriter;
 use Rcalicdan\MySQLBinaryProtocol\Packet\PayloadReader;
 use Rcalicdan\MySQLBinaryProtocol\Packet\UncompressedPacketReader;
-
 use SplQueue;
 use Throwable;
 
@@ -157,6 +156,7 @@ class Connection
      *
      * @param MysqlConfig|array<string, mixed>|string $config
      * @param ConnectorInterface|null $connector
+     *
      * @return PromiseInterface<self>
      */
     public static function create(
@@ -294,9 +294,9 @@ class Connection
     {
         $stream = new RowStream($bufferSize);
 
-        $stream->setBackpressureHandler(function (bool $shouldPause): void {
+        $stream->backpressureHandler = function (bool $shouldPause): void {
             $shouldPause ? $this->pause() : $this->resume();
-        });
+        };
 
         /** @var Promise<RowStream> $outerPromise */
         $outerPromise = new Promise();
@@ -329,16 +329,14 @@ class Connection
             context: $context
         );
 
-        $stream->setCommandPromise($commandPromise);
+        $stream->commandQueuePromise = $commandPromise;
 
         $commandPromise->then(
             $stream->markCommandFinished(...),
             $stream->error(...)
         );
 
-        $outerPromise->onCancel(function () use ($stream): void {
-            $stream->cancel();
-        });
+        $outerPromise->onCancel($stream->cancel(...));
 
         return $outerPromise;
     }
@@ -462,6 +460,7 @@ class Connection
 
     /**
      * @param array<int, mixed> $params
+     *
      * @return PromiseInterface<Result>
      */
     public function executeStatement(PreparedStatement $stmt, array $params): PromiseInterface
@@ -478,6 +477,7 @@ class Connection
 
     /**
      * @param array<int, mixed> $params
+     *
      * @return PromiseInterface<StreamStats>
      */
     public function executeStream(
@@ -515,6 +515,7 @@ class Connection
      * Enqueues a command for execution and returns a promise for its result.
      *
      * @param array<int, mixed> $params
+     *
      * @return PromiseInterface<mixed>
      */
     private function enqueueCommand(
@@ -673,7 +674,8 @@ class Connection
                 Connection::create($this->params, $this->connector)
                     ->then(function (Connection $killConn) use ($threadId): PromiseInterface {
                         return $killConn->query("KILL QUERY {$threadId}")
-                            ->finally(fn() => $killConn->close());
+                            ->finally(fn () => $killConn->close())
+                        ;
                     }),
                 $this->params->killTimeoutSeconds
             )->then($settle, $settle);

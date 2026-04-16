@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use function Hibla\await;
-use function Hibla\delay;
-
 use Hibla\EventLoop\Loop;
 use Hibla\Promise\Exceptions\CancelledException;
+
+use function Hibla\await;
+use function Hibla\delay;
 
 describe('Client Query Cancellation', function (): void {
     it('cancels a non-prepared query via the client and throws CancelledException', function (): void {
@@ -19,8 +19,9 @@ describe('Client Query Cancellation', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -36,8 +37,9 @@ describe('Client Query Cancellation', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         $result = await($client->query('SELECT "Alive" AS status'));
 
@@ -56,8 +58,9 @@ describe('Client Query Cancellation', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -73,8 +76,9 @@ describe('Client Query Cancellation', function (): void {
             $queryPromise->cancel();
         });
 
-        expect(fn() => await($queryPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($queryPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         $result = await($client->query('SELECT ? AS echo_value', ['HelloAfterCancel']));
 
@@ -100,8 +104,9 @@ describe('Client Waiter Cancellation', function (): void {
             $waiterPromise->cancel();
         });
 
-        expect(fn() => await($waiterPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($waiterPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         // Cancel holders to clean up
         foreach ($holders as $holder) {
@@ -128,8 +133,9 @@ describe('Client Waiter Cancellation', function (): void {
             $waiterPromise->cancel();
         });
 
-        expect(fn() => await($waiterPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($waiterPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         foreach ($holders as $holder) {
             $holder->cancel();
@@ -158,8 +164,9 @@ describe('Client Waiter Cancellation', function (): void {
             $waiterPromise->cancel();
         });
 
-        expect(fn() => await($waiterPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($waiterPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         foreach ($holders as $holder) {
             $holder->cancel();
@@ -167,7 +174,7 @@ describe('Client Waiter Cancellation', function (): void {
 
         await(delay(3.0));
 
-        $stats = $client->getStats();
+        $stats = $client->stats;
 
         expect($stats['draining_connections'])->toBe(0)
             ->and($stats['waiting_requests'])->toBe(0)

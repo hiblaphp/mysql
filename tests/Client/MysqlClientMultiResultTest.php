@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use function Hibla\await;
 
 beforeAll(function (): void {
@@ -33,7 +35,8 @@ describe('Stored Procedure Multi Result Sets', function (): void {
         $row = $result->fetchOne();
 
         expect($row['table_name'])->toBe('First Table')
-            ->and($row['value'])->toBe('10');
+            ->and($row['value'])->toBe('10')
+        ;
 
         $client->close();
     });
@@ -49,7 +52,8 @@ describe('Stored Procedure Multi Result Sets', function (): void {
             ->and($result2)->not->toBeNull()
             ->and($result2->fetchOne()['value'])->toBe('20')
             ->and($result3)->not->toBeNull()
-            ->and($result3->fetchOne()['value'])->toBe('30');
+            ->and($result3->fetchOne()['value'])->toBe('30')
+        ;
 
         $client->close();
     });
@@ -76,7 +80,8 @@ describe('Stored Procedure Multi Result Sets', function (): void {
 
         expect($result1->fetchOne()['table_name'])->toBe('First Table')
             ->and($result2->fetchOne()['table_name'])->toBe('Second Table')
-            ->and($result3->fetchOne()['table_name'])->toBe('Third Table');
+            ->and($result3->fetchOne()['table_name'])->toBe('Third Table')
+        ;
 
         $client->close();
     });
@@ -95,7 +100,8 @@ describe('Stored Procedure Multi Result Sets', function (): void {
         expect($resultSets)->toHaveCount(3)
             ->and($resultSets[0]['value'])->toBe('10')
             ->and($resultSets[1]['value'])->toBe('20')
-            ->and($resultSets[2]['value'])->toBe('30');
+            ->and($resultSets[2]['value'])->toBe('30')
+        ;
 
         $client->close();
     });
@@ -107,7 +113,8 @@ describe('Stored Procedure Multi Result Sets', function (): void {
         $row = $result->fetchOne();
 
         expect($row['table_name'])->toBe('First Table')
-            ->and($row['value'])->toBe(10);
+            ->and($row['value'])->toBe(10)
+        ;
 
         $client->close();
     });
@@ -123,7 +130,8 @@ describe('Stored Procedure Multi Result Sets', function (): void {
             ->and($result2)->not->toBeNull()
             ->and($result2->fetchOne()['value'])->toBe(20)
             ->and($result3)->not->toBeNull()
-            ->and($result3->fetchOne()['value'])->toBe(30);
+            ->and($result3->fetchOne()['value'])->toBe(30)
+        ;
 
         $client->close();
     });
@@ -150,7 +158,8 @@ describe('Stored Procedure Multi Result Sets', function (): void {
 
         expect($result1->fetchOne()['table_name'])->toBe('First Table')
             ->and($result2->fetchOne()['table_name'])->toBe('Second Table')
-            ->and($result3->fetchOne()['table_name'])->toBe('Third Table');
+            ->and($result3->fetchOne()['table_name'])->toBe('Third Table')
+        ;
 
         $client->close();
     });
@@ -169,7 +178,8 @@ describe('Stored Procedure Multi Result Sets', function (): void {
         expect($resultSets)->toHaveCount(3)
             ->and($resultSets[0]['value'])->toBe(10)
             ->and($resultSets[1]['value'])->toBe(20)
-            ->and($resultSets[2]['value'])->toBe(30);
+            ->and($resultSets[2]['value'])->toBe(30)
+        ;
 
         $client->close();
     });
@@ -183,7 +193,8 @@ describe('Stored Procedure Multi Result Sets', function (): void {
 
         expect($result1->fetchOne()['value'])->toBe('5')
             ->and($result2->fetchOne()['value'])->toBe('10')
-            ->and($result3->fetchOne()['value'])->toBe('15');
+            ->and($result3->fetchOne()['value'])->toBe('15')
+        ;
 
         $client->close();
     });
@@ -197,7 +208,8 @@ describe('Stored Procedure Multi Result Sets', function (): void {
 
         expect($result1->fetchOne()['value'])->toBe(5)
             ->and($result2->fetchOne()['value'])->toBe(10)
-            ->and($result3->fetchOne()['value'])->toBe(15);
+            ->and($result3->fetchOne()['value'])->toBe(15)
+        ;
 
         $client->close();
     });
@@ -208,7 +220,7 @@ describe('Stored Procedure Multi Result Sets', function (): void {
         await($client->query('CALL test_multi_results(1)'));
         await($client->query('CALL test_multi_results(2)'));
 
-        expect($client->getStats()['pooled_connections'])->toBe(1);
+        expect($client->stats['pooled_connections'])->toBe(1);
 
         $client->close();
     });
@@ -219,7 +231,7 @@ describe('Stored Procedure Multi Result Sets', function (): void {
         await($client->query('CALL test_multi_results(?)', [1]));
         await($client->query('CALL test_multi_results(?)', [2]));
 
-        expect($client->getStats()['pooled_connections'])->toBe(1);
+        expect($client->stats['pooled_connections'])->toBe(1);
 
         $client->close();
     });

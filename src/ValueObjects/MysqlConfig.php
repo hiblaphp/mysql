@@ -60,12 +60,12 @@ final readonly class MysqlConfig
     /**
      * Creates MysqlConfig from array configuration.
      *
-     *   
+     *
      * Recognised keys:
      *   host, port, username, password, database, charset, connect_timeout,
      *   ssl, ssl_ca, ssl_cert, ssl_key, ssl_verify, kill_timeout_seconds,
      *   enable_server_side_cancellation, compress, reset_connection
-     * 
+     *
      * @param array<string, mixed> $config
      */
     public static function fromArray(array $config): self

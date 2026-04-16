@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use function Hibla\await;
-
 use Hibla\Promise\Promise;
+
+use function Hibla\await;
 
 beforeAll(function (): void {
     $client = makeConcurrentClient();
@@ -473,7 +473,7 @@ describe('Concurrent Query Execution', function (): void {
 
             await(Promise::all($promises));
 
-            $stats = $client->getStats();
+            $stats = $client->stats;
 
             expect($stats['waiting_requests'])->toBe(0)
                 ->and($stats['pooled_connections'])->toBe($stats['active_connections'])

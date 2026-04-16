@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-use function Hibla\await;
 use Hibla\Mysql\Internals\Connection;
 use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Sql\Exceptions\ConnectionException;
+
+use function Hibla\await;
 
 describe('Real SSL/TLS Connection', function (): void {
 
@@ -20,6 +21,7 @@ describe('Real SSL/TLS Connection', function (): void {
         ]);
 
         $exception = null;
+
         try {
             await(Connection::create($config));
         } catch (ConnectionException $e) {
@@ -27,7 +29,8 @@ describe('Real SSL/TLS Connection', function (): void {
         }
 
         expect($exception)->toBeInstanceOf(ConnectionException::class)
-            ->and($exception->getMessage())->toContain('Connections using insecure transport are prohibited');
+            ->and($exception->getMessage())->toContain('Connections using insecure transport are prohibited')
+        ;
     });
 
     it('connects successfully via SSL with verification disabled', function (): void {
@@ -47,7 +50,8 @@ describe('Real SSL/TLS Connection', function (): void {
         $cipher = $result->fetchOne()['Value'];
 
         expect($conn->isReady())->toBeTrue()
-            ->and($cipher)->not->toBeEmpty();
+            ->and($cipher)->not->toBeEmpty()
+        ;
 
         $conn->close();
     });
@@ -72,7 +76,8 @@ describe('Real SSL/TLS Connection', function (): void {
         $tlsVersion = $result->fetchOne()['Value'];
 
         expect($conn->isReady())->toBeTrue()
-            ->and($tlsVersion)->toContain('TLS');
+            ->and($tlsVersion)->toContain('TLS')
+        ;
 
         $conn->close();
     });
@@ -90,6 +95,7 @@ describe('Real SSL/TLS Connection', function (): void {
         ]);
 
         $exception = null;
+
         try {
             await(Connection::create($config));
         } catch (ConnectionException $e) {
@@ -97,15 +103,16 @@ describe('Real SSL/TLS Connection', function (): void {
         }
 
         expect($exception)->toBeInstanceOf(ConnectionException::class)
-            ->and($exception->getMessage())->toMatch('/verify_peer|certificate/i');
+            ->and($exception->getMessage())->toMatch('/verify_peer|certificate/i')
+        ;
     });
 
     it('connects successfully using Client Certificates (mTLS)', function (): void {
         $fixtureDir = __DIR__ . '/../Fixtures/ssl';
 
-        $caPath   = realpath($fixtureDir . '/ca.pem');
+        $caPath = realpath($fixtureDir . '/ca.pem');
         $certPath = realpath($fixtureDir . '/client-cert.pem');
-        $keyPath  = realpath($fixtureDir . '/client-key.pem');
+        $keyPath = realpath($fixtureDir . '/client-key.pem');
 
         if ($caPath === false || $certPath === false || $keyPath === false) {
             $this->fail(sprintf(
@@ -140,10 +147,10 @@ describe('Real SSL/TLS Connection', function (): void {
 
         $fixtureDir = __DIR__ . '/../Fixtures/ssl';
 
-        $caPath   = realpath($fixtureDir . '/ca.pem');
+        $caPath = realpath($fixtureDir . '/ca.pem');
         $certPath = realpath($fixtureDir . '/client-cert.pem');
-        $keyPath  = realpath($fixtureDir . '/client-key.pem');
-        
+        $keyPath = realpath($fixtureDir . '/client-key.pem');
+
         $config = MysqlConfig::fromArray([
             'host' => $_ENV['MYSQL_SSL_HOST'] ?? '127.0.0.1',
             'port' => (int) ($_ENV['MYSQL_SSL_PORT'] ?? 3307),
@@ -159,20 +166,21 @@ describe('Real SSL/TLS Connection', function (): void {
 
         $conn = await(Connection::create($config));
 
-        await($conn->query("CREATE TEMPORARY TABLE IF NOT EXISTS test_large_packet (data LONGBLOB)"));
+        await($conn->query('CREATE TEMPORARY TABLE IF NOT EXISTS test_large_packet (data LONGBLOB)'));
 
         $size = 17 * 1024 * 1024;
 
         $largeString = str_repeat('A', $size);
 
-        $stmt = await($conn->prepare("INSERT INTO test_large_packet (data) VALUES (?)"));
+        $stmt = await($conn->prepare('INSERT INTO test_large_packet (data) VALUES (?)'));
         await($stmt->execute([$largeString]));
 
-        $result = await($conn->query("SELECT data FROM test_large_packet"));
+        $result = await($conn->query('SELECT data FROM test_large_packet'));
         $row = $result->fetchOne();
 
         expect(strlen($row['data']))->toBe($size)
-            ->and(md5($row['data']))->toBe(md5($largeString));
+            ->and(md5($row['data']))->toBe(md5($largeString))
+        ;
 
         $conn->close();
     });

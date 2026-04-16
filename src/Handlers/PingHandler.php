@@ -17,7 +17,7 @@ final class PingHandler
     private int $sequenceId = 0;
 
     /**
-     *  @var Promise<bool>|null
+     * @var Promise<bool>|null
      */
     private ?Promise $currentPromise = null;
 

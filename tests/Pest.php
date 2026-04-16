@@ -2,18 +2,17 @@
 
 declare(strict_types=1);
 
-use function Hibla\await;
-
 use Hibla\Mysql\Internals\Connection;
 use Hibla\Mysql\Manager\PoolManager;
 use Hibla\Mysql\MysqlClient;
-
 use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Promise\Promise;
 
+use function Hibla\await;
+
 uses()
     ->beforeAll(function () {
-        Promise::setRejectionHandler(fn() => null);
+        Promise::setRejectionHandler(fn () => null);
     })
     ->afterEach(function () {
         Mockery::close();
@@ -101,7 +100,7 @@ function testMysqlConfig(bool $enableServerSideCancellation = false): MysqlConfi
         'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
         'username' => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
         'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
-        'enable_server_side_cancellation' => $enableServerSideCancellation
+        'enable_server_side_cancellation' => $enableServerSideCancellation,
     ]);
 }
 
@@ -296,19 +295,18 @@ function makeOnConnectClient(
 ): MysqlClient {
     return new MysqlClient(
         config: [
-            'host'                           => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
-            'port'                           => (int) ($_ENV['MYSQL_PORT'] ?? 3310),
-            'database'                       => $_ENV['MYSQL_DATABASE'] ?? 'test',
-            'username'                       => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
-            'password'                       => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
-            'reset_connection'               => $resetConnection,
+            'host' => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
+            'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3310),
+            'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
+            'username' => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
+            'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
+            'reset_connection' => $resetConnection,
             'enable_server_side_cancellation' => false,
         ],
         maxConnections: $maxConnections,
         onConnect: $onConnect,
     );
 }
-
 
 function makeManualTransactionClient(int $maxConnections = 1): MysqlClient
 {

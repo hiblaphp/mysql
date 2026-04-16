@@ -79,7 +79,9 @@ class TransactionPreparedStatement implements PreparedStatementInterface
      * Bridges cancel() → cancelChain() on a public-facing promise.
      *
      * @template T
+     *
      * @param PromiseInterface<T> $promise
+     *
      * @return PromiseInterface<T>
      */
     private function withCancellation(PromiseInterface $promise): PromiseInterface

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use function Hibla\await;
-use function Hibla\delay;
-
 use Hibla\EventLoop\Loop;
 use Hibla\Promise\Exceptions\CancelledException;
+
+use function Hibla\await;
+use function Hibla\delay;
 
 beforeAll(function (): void {
     $client = makeClient(enableServerSideCancellation: true);
@@ -43,8 +43,9 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -62,8 +63,9 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         await(delay(0.5));
 
@@ -87,8 +89,9 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
 
@@ -107,8 +110,9 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn() => await($streamPromise))
-            ->toThrow(CancelledException::class);
+        expect(fn () => await($streamPromise))
+            ->toThrow(CancelledException::class)
+        ;
 
         await(delay(0.5));
 
@@ -257,7 +261,7 @@ describe('Client Stream Cancellation', function (): void {
         $result = await($client->query('SELECT "PoolRecovered" AS status'));
 
         expect($result->fetchOne()['status'])->toBe('PoolRecovered')
-            ->and($client->getStats()['draining_connections'])->toBe(0)
+            ->and($client->stats['draining_connections'])->toBe(0)
         ;
 
         $client->close();
