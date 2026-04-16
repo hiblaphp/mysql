@@ -11,6 +11,8 @@ use Rcalicdan\MySQLBinaryProtocol\Factory\DefaultPacketReaderFactory;
 use Rcalicdan\MySQLBinaryProtocol\Packet\PayloadReader;
 use Tests\Fixtures\SslCapableConnection;
 
+use function Hibla\await;
+
 describe('HandshakeHandler', function () {
     it('creates handshake handler successfully', function () {
         $socket = Mockery::mock(SocketConnection::class);
@@ -33,39 +35,34 @@ describe('HandshakeHandler', function () {
         expect($result)->toBeInstanceOf(PromiseInterface::class);
     });
 
-    it('rejects when socket does not support encryption during SSL upgrade', function () {
+    it('rejects when server does not support SSL', function () {
         $params = createMysqlConfig(ssl: true);
-
         $socket = Mockery::mock(SocketConnection::class);
-        $socket->shouldReceive('write')->once();
 
         $handler = new HandshakeHandler($socket, $params);
 
-        $handshakePacket = buildMySQLHandshakeV10Packet(supportsSSL: true);
+        $handshakePacket = buildMySQLHandshakeV10Packet(supportsSSL: false);
         $packetReader = (new DefaultPacketReaderFactory())->createWithDefaultSettings();
         $packetReader->append($handshakePacket);
 
         $promise = $handler->start($packetReader);
 
-        $rejected = false;
-        $errorMessage = '';
+        $exception = null;
+        
+        try {
+            await($promise);
+        } catch (\Throwable $e) {
+            $exception = $e;
+        }
 
-        $promise->catch(function ($e) use (&$rejected, &$errorMessage) {
-            $rejected = true;
-            $errorMessage = $e->getMessage();
-        });
-
-        Loop::run();
-
-        expect($rejected)->toBeTrue()
-            ->and($errorMessage)->toContain('SSL/TLS upgrade')
-        ;
+        expect($exception)->not->toBeNull()
+            ->and($exception->getMessage())->toContain('server does not support SSL');
     });
 
     it('writes SSL request packet when SSL is enabled', function () {
         $params = createMysqlConfig(ssl: true);
 
-        $socket = Mockery::mock(SslCapableConnection::class);
+        $socket = Mockery::mock(SocketConnection::class);
 
         $socket->shouldReceive('write')->twice()->andReturnUsing(function ($packet) {
             expect(strlen($packet))->toBeGreaterThan(0);
@@ -224,7 +221,7 @@ describe('HandshakeHandler', function () {
     it('handles full auth required over SSL', function () {
         $params = createMysqlConfig(ssl: true);
 
-        $socket = Mockery::mock(SslCapableConnection::class);
+        $socket = Mockery::mock(SocketConnection::class);
 
         $socket->shouldReceive('write')->times(3);
         $socket->shouldReceive('enableEncryption')->once()->andReturn(Promise::resolved());
