@@ -198,8 +198,6 @@ describe('MysqlClient', function (): void {
             await($client->query('SELECT 1'));
             await($client->query('SELECT 2'));
 
-            // If connection was not released the second query would deadlock.
-            // Verify it's sitting idle in the pool now.
             expect($client->stats['pooled_connections'])->toBe(1);
 
             $client->close();
@@ -214,8 +212,6 @@ describe('MysqlClient', function (): void {
                 // expected
             }
 
-            // Connection should be healthy and back in the pool.
-            // A follow-up query proves it was released.
             $result = await($client->query('SELECT 1 AS val'));
 
             expect($result->fetchOne()['val'])->toBe('1');
@@ -377,8 +373,6 @@ describe('MysqlClient', function (): void {
         it('returns null for a numeric index because fetchOne returns associative arrays only', function (): void {
             $client = makeClient();
 
-            // fetchOne() returns purely associative arrays — integer index 0
-            // falls through to the null-coalescing fallback in fetchValue()
             $value = await($client->fetchValue('SELECT 42 AS answer', 0));
 
             expect($value)->toBeNull();
@@ -459,7 +453,6 @@ describe('MysqlClient', function (): void {
                 // consume
             }
 
-            // If connection was not released this would deadlock on a single-slot pool.
             $result = await($client->query('SELECT 3 AS val'));
 
             expect($result->fetchOne()['val'])->toBe('3');
@@ -544,8 +537,6 @@ describe('MysqlClient', function (): void {
                 // expected
             }
 
-            // Connection was returned healthy to the pool.
-            // A follow-up query on the same single-slot pool proves it.
             $result = await($client->query('SELECT 1 AS val'));
 
             expect($result->fetchOne()['val'])->toBe('1');
@@ -736,12 +727,11 @@ describe('MysqlClient', function (): void {
         it('handles large payload over a compressed connection', function (): void {
             $client = makeCompressedClient();
 
-            // Generate a large compressible string well above the 50-byte threshold
             $largeValue = str_repeat('ABCDEFGHIJ', 100);
 
             $insertId = await($client->executeGetId(
                 'INSERT INTO mysql_client_test (name) VALUES (?)',
-                [substr($largeValue, 0, 100)] // VARCHAR(100) limit
+                [substr($largeValue, 0, 100)] 
             ));
 
             expect($insertId)->toBeGreaterThan(0);
@@ -789,7 +779,6 @@ describe('MysqlClient', function (): void {
             await($client->query('SELECT 1'));
             await($client->query('SELECT 2'));
 
-            // Second query would deadlock if connection was not returned to the pool
             expect($client->stats['pooled_connections'])->toBe(1);
 
             $client->close();

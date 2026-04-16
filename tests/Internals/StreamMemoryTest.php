@@ -335,7 +335,7 @@ describe('Stream Memory', function (): void {
 
                 $stats = $stream->stats;
 
-                expect($stats->getRowsPerSecond())->toBeGreaterThan(0.0);
+                expect($stats->rowsPerSecond)->toBeGreaterThan(0.0);
 
                 $conn->close();
             });
@@ -350,7 +350,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->stats->getRowsPerSecond())->toBe(0.0);
+                expect($stream->stats->rowsPerSecond)->toBe(0.0);
 
                 $conn->close();
             });
@@ -366,7 +366,7 @@ describe('Stream Memory', function (): void {
                 $stats = $stream->stats;
                 $expected = $stats->rowCount / $stats->duration;
 
-                expect($stats->getRowsPerSecond())->toBe($expected);
+                expect($stats->rowsPerSecond)->toBe($expected);
 
                 $conn->close();
             });
@@ -464,7 +464,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->stats->getRowsPerSecond())->toBeGreaterThan(0.0);
+                expect($stream->stats->rowsPerSecond)->toBeGreaterThan(0.0);
 
                 await($stmt->close());
                 $conn->close();
@@ -481,7 +481,7 @@ describe('Stream Memory', function (): void {
                     // consume
                 }
 
-                expect($stream->stats->getRowsPerSecond())->toBe(0.0);
+                expect($stream->stats->rowsPerSecond)->toBe(0.0);
 
                 await($stmt->close());
                 $conn->close();
@@ -499,7 +499,7 @@ describe('Stream Memory', function (): void {
                 $stats = $stream->stats;
                 $expected = $stats->rowCount / $stats->duration;
 
-                expect($stats->getRowsPerSecond())->toBe($expected);
+                expect($stats->rowsPerSecond)->toBe($expected);
 
                 await($stmt->close());
                 $conn->close();

@@ -58,8 +58,6 @@ describe('Pool Waiter Cancellation', function (): void {
 
         $resolvedConn = await($activeWaiter);
 
-        // Give the Event Loop a moment to process the 'finally' callback
-        // that decrements the pendingWaiters counter.
         await(delay(0.01));
 
         expect($resolvedConn)->toBeInstanceOf(Connection::class)
@@ -80,7 +78,6 @@ describe('Pool Waiter Cancellation', function (): void {
 
         $pool->release($conn);
 
-        // No active waiters — connection should park in idle pool
         expect($pool->stats['pooled_connections'])->toBe(1);
 
         $pool->close();
@@ -116,9 +113,9 @@ describe('Pool Drain and Release', function (): void {
         $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
-        $queryPromise = $conn->query('SELECT SLEEP(10)');
+        $queryPromise = $conn->query('SELECT SLEEP(3)');
 
-        Loop::addTimer(2.0, function () use ($queryPromise): void {
+        Loop::addTimer(0.5, function () use ($queryPromise): void {
             $queryPromise->cancel();
         });
 
@@ -128,11 +125,9 @@ describe('Pool Drain and Release', function (): void {
 
         expect($conn->wasQueryCancelled())->toBeTrue();
 
-        // Release triggers drainAndRelease internally
         $pool->release($conn);
 
-        // Wait long enough for the kill connection to open, execute, and drain
-        await(delay(3.0));
+        await(delay(1.0));
 
         expect($pool->stats['pooled_connections'])->toBe(1)
             ->and($pool->stats['draining_connections'])->toBe(0)
@@ -145,9 +140,9 @@ describe('Pool Drain and Release', function (): void {
         $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
-        $queryPromise = $conn->query('SELECT SLEEP(10)');
+        $queryPromise = $conn->query('SELECT SLEEP(3)');
 
-        Loop::addTimer(2.0, function () use ($queryPromise): void {
+        Loop::addTimer(0.5, function () use ($queryPromise): void {
             $queryPromise->cancel();
         });
 
@@ -157,8 +152,7 @@ describe('Pool Drain and Release', function (): void {
 
         $pool->release($conn);
 
-        // Wait for drain to complete
-        await(delay(3.0));
+        await(delay(1.0));
 
         $reusedConn = await($pool->get());
         $result = await($reusedConn->query('SELECT "Alive" AS status'));
@@ -175,9 +169,9 @@ describe('Pool Drain and Release', function (): void {
         $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
-        $queryPromise = $conn->query('SELECT SLEEP(10)');
+        $queryPromise = $conn->query('SELECT SLEEP(3)');
 
-        Loop::addTimer(2.0, function () use ($queryPromise): void {
+        Loop::addTimer(0.5, function () use ($queryPromise): void {
             $queryPromise->cancel();
         });
 
@@ -185,15 +179,12 @@ describe('Pool Drain and Release', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        // Queue a waiter before releasing
         $waiter = $pool->get();
 
-        // Release — triggers drainAndRelease, not immediate hand-off
         $pool->release($conn);
 
         $nextConn = await($waiter);
 
-        // By the time the waiter resolves the drain must have completed
         expect($nextConn->wasQueryCancelled())->toBeFalse()
             ->and($nextConn->isReady())->toBeTrue()
         ;
@@ -210,9 +201,9 @@ describe('Pool Drain and Release', function (): void {
         $pool = makePool(maxSize: 1, enableServerSideCancellation: true);
         $conn = await($pool->get());
 
-        $queryPromise = $conn->query('SELECT SLEEP(10)');
+        $queryPromise = $conn->query('SELECT SLEEP(3)');
 
-        Loop::addTimer(2.0, function () use ($queryPromise): void {
+        Loop::addTimer(0.5, function () use ($queryPromise): void {
             $queryPromise->cancel();
         });
 
@@ -222,7 +213,6 @@ describe('Pool Drain and Release', function (): void {
 
         $pool->release($conn);
 
-        // Close the pool immediately — drain is still in progress
         $pool->close();
 
         expect($pool->stats['draining_connections'])->toBe(0)
@@ -238,9 +228,9 @@ describe('Pool Query Cancellation Integration', function (): void {
         $conn = await($pool->get());
         $startTime = microtime(true);
 
-        $queryPromise = $conn->query('SELECT SLEEP(10)');
+        $queryPromise = $conn->query('SELECT SLEEP(3)');
 
-        Loop::addTimer(2.0, function () use ($queryPromise): void {
+        Loop::addTimer(0.5, function () use ($queryPromise): void {
             $queryPromise->cancel();
         });
 
@@ -260,9 +250,9 @@ describe('Pool Query Cancellation Integration', function (): void {
         $startTime = microtime(true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
-        $execPromise = $stmt->execute([10]);
+        $execPromise = $stmt->execute([3]);
 
-        Loop::addTimer(2.0, function () use ($execPromise): void {
+        Loop::addTimer(0.5, function () use ($execPromise): void {
             $execPromise->cancel();
         });
 
@@ -282,9 +272,9 @@ describe('Pool Query Cancellation Integration', function (): void {
         $conn = await($pool->get());
         $startTime = microtime(true);
 
-        $streamPromise = $conn->streamQuery('SELECT SLEEP(10)');
+        $streamPromise = $conn->streamQuery('SELECT SLEEP(3)');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.5, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -303,9 +293,9 @@ describe('Pool Query Cancellation Integration', function (): void {
         $conn1 = await($pool->get());
         $conn2 = await($pool->get());
 
-        $queryPromise = $conn1->query('SELECT SLEEP(10)');
+        $queryPromise = $conn1->query('SELECT SLEEP(3)');
 
-        Loop::addTimer(2.0, function () use ($queryPromise): void {
+        Loop::addTimer(0.5, function () use ($queryPromise): void {
             $queryPromise->cancel();
         });
 
@@ -316,7 +306,7 @@ describe('Pool Query Cancellation Integration', function (): void {
         $pool->release($conn1);
         $pool->release($conn2);
 
-        await(delay(3.0));
+        await(delay(1.0));
 
         $stats = $pool->stats;
 
@@ -334,9 +324,9 @@ describe('Pool Query Cancellation Integration', function (): void {
 
         for ($i = 0; $i < 3; $i++) {
             $conn = await($pool->get());
-            $queryPromise = $conn->query('SELECT SLEEP(10)');
+            $queryPromise = $conn->query('SELECT SLEEP(3)');
 
-            Loop::addTimer(1.0, function () use ($queryPromise): void {
+            Loop::addTimer(0.3, function () use ($queryPromise): void {
                 $queryPromise->cancel();
             });
 
@@ -347,7 +337,7 @@ describe('Pool Query Cancellation Integration', function (): void {
             $pool->release($conn);
         }
 
-        await(delay(3.0));
+        await(delay(1.0));
 
         $conn = await($pool->get());
         $result = await($conn->query('SELECT "AllGreen" AS status'));

@@ -978,7 +978,7 @@ describe('Connection', function (): void {
             $conn = makeConnection();
             $result = await($conn->query('SELECT 1 AS a, 2 AS b, 3 AS c'));
 
-            expect($result->getColumnCount())->toBe(3);
+            expect($result->columnCount)->toBe(3);
 
             $conn->close();
         });
@@ -1003,7 +1003,7 @@ describe('Connection', function (): void {
             $conn = makeConnection();
             $result = await($conn->query('SELECT 1'));
 
-            expect($result->getWarningCount())->toBeInt();
+            expect($result->warningCount)->toBeInt();
 
             $conn->close();
         });

@@ -40,9 +40,9 @@ describe('Transaction Cancellation', function (): void {
         await($conn->query('START TRANSACTION'));
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('row1')"));
 
-        $insertPromise = $conn->query('INSERT INTO cancel_test (value) SELECT SLEEP(10)');
+        $insertPromise = $conn->query('INSERT INTO cancel_test (value) SELECT SLEEP(3)');
 
-        Loop::addTimer(2.0, function () use ($insertPromise): void {
+        Loop::addTimer(0.5, function () use ($insertPromise): void {
             $insertPromise->cancel();
         });
 
@@ -61,9 +61,9 @@ describe('Transaction Cancellation', function (): void {
         await($conn->query('START TRANSACTION'));
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('row1')"));
 
-        $insertPromise = $conn->query('INSERT INTO cancel_test (value) SELECT SLEEP(10)');
+        $insertPromise = $conn->query('INSERT INTO cancel_test (value) SELECT SLEEP(3)');
 
-        Loop::addTimer(2.0, function () use ($insertPromise): void {
+        Loop::addTimer(0.5, function () use ($insertPromise): void {
             $insertPromise->cancel();
         });
 
@@ -97,9 +97,9 @@ describe('Transaction Cancellation', function (): void {
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('prepared_row1')"));
 
         $stmt = await($conn->prepare('INSERT INTO cancel_test (value) SELECT SLEEP(?)'));
-        $execPromise = $stmt->execute([10]);
+        $execPromise = $stmt->execute([3]);
 
-        Loop::addTimer(2.0, function () use ($execPromise): void {
+        Loop::addTimer(0.5, function () use ($execPromise): void {
             $execPromise->cancel();
         });
 
@@ -121,9 +121,9 @@ describe('Transaction Cancellation', function (): void {
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('prepared_row1')"));
 
         $stmt = await($conn->prepare('INSERT INTO cancel_test (value) SELECT SLEEP(?)'));
-        $execPromise = $stmt->execute([10]);
+        $execPromise = $stmt->execute([3]);
 
-        Loop::addTimer(2.0, function () use ($execPromise): void {
+        Loop::addTimer(0.5, function () use ($execPromise): void {
             $execPromise->cancel();
         });
 
@@ -146,8 +146,6 @@ describe('Transaction Cancellation', function (): void {
         $result = await($conn->query('SELECT COUNT(*) AS count FROM cancel_test'));
         $count = (int) $result->fetchOne()['count'];
 
-        // 2 rows minimum (prepared_row1 + after_cancel)
-        // 3 rows possible if SLEEP returned 1 before KILL arrived
         expect($count)->toBeGreaterThanOrEqual(2)
             ->and($count)->toBeLessThanOrEqual(3)
         ;
@@ -163,9 +161,9 @@ describe('Transaction Cancellation', function (): void {
         await($conn->query('START TRANSACTION'));
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('stream_test1'), ('stream_test2'), ('stream_test3')"));
 
-        $streamPromise = $conn->streamQuery('SELECT value, SLEEP(10) AS delay FROM cancel_test');
+        $streamPromise = $conn->streamQuery('SELECT value, SLEEP(3) AS delay FROM cancel_test');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.5, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -185,9 +183,9 @@ describe('Transaction Cancellation', function (): void {
         await($conn->query('START TRANSACTION'));
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('stream_test1'), ('stream_test2'), ('stream_test3')"));
 
-        $streamPromise = $conn->streamQuery('SELECT value, SLEEP(10) AS delay FROM cancel_test');
+        $streamPromise = $conn->streamQuery('SELECT value, SLEEP(3) AS delay FROM cancel_test');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.5, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -204,7 +202,6 @@ describe('Transaction Cancellation', function (): void {
             $conn->clearCancelledFlag();
         }
 
-        // Should still be able to query within the same transaction
         $result = await($conn->query('SELECT COUNT(*) AS count FROM cancel_test'));
 
         expect((int) $result->fetchOne()['count'])->toBe(3);
@@ -219,9 +216,9 @@ describe('Transaction Cancellation', function (): void {
         await($conn->query('START TRANSACTION'));
         await($conn->query("INSERT INTO cancel_test (value) VALUES ('stream_test1'), ('stream_test2'), ('stream_test3')"));
 
-        $streamPromise = $conn->streamQuery('SELECT value, SLEEP(10) AS delay FROM cancel_test');
+        $streamPromise = $conn->streamQuery('SELECT value, SLEEP(3) AS delay FROM cancel_test');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.5, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -255,9 +252,9 @@ describe('Transaction Cancellation', function (): void {
 
         await($conn->query('START TRANSACTION'));
 
-        $updatePromise = $conn->query("UPDATE cancel_test SET value = 'updated' WHERE id > 0 AND SLEEP(10) = 0");
+        $updatePromise = $conn->query("UPDATE cancel_test SET value = 'updated' WHERE id > 0 AND SLEEP(3) = 0");
 
-        Loop::addTimer(2.0, function () use ($updatePromise): void {
+        Loop::addTimer(0.5, function () use ($updatePromise): void {
             $updatePromise->cancel();
         });
 
@@ -278,9 +275,9 @@ describe('Transaction Cancellation', function (): void {
 
         await($conn->query('START TRANSACTION'));
 
-        $updatePromise = $conn->query("UPDATE cancel_test SET value = 'updated' WHERE id > 0 AND SLEEP(10) = 0");
+        $updatePromise = $conn->query("UPDATE cancel_test SET value = 'updated' WHERE id > 0 AND SLEEP(3) = 0");
 
-        Loop::addTimer(2.0, function () use ($updatePromise): void {
+        Loop::addTimer(0.5, function () use ($updatePromise): void {
             $updatePromise->cancel();
         });
 
@@ -312,9 +309,9 @@ describe('Transaction Cancellation', function (): void {
 
         await($conn->query('START TRANSACTION'));
 
-        $updatePromise = $conn->query("UPDATE cancel_test SET value = 'updated' WHERE id > 0 AND SLEEP(10) = 0");
+        $updatePromise = $conn->query("UPDATE cancel_test SET value = 'updated' WHERE id > 0 AND SLEEP(3) = 0");
 
-        Loop::addTimer(2.0, function () use ($updatePromise): void {
+        Loop::addTimer(0.5, function () use ($updatePromise): void {
             $updatePromise->cancel();
         });
 

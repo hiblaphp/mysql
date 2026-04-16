@@ -242,7 +242,7 @@ describe('Client Stream Cancellation', function (): void {
             );
         }
 
-        Loop::addTimer(0.3, function () use ($streamPromises): void {
+        Loop::addTimer(0.5, function () use ($streamPromises): void {
             foreach ($streamPromises as $p) {
                 $p->cancel();
             }

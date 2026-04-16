@@ -8,7 +8,7 @@ use Hibla\Promise\Exceptions\CancelledException;
 use function Hibla\await;
 use function Hibla\sleep;
 
-beforeEach(function (): void {
+beforeAll(function (): void {
     $client = makeTransactionClient(enableServerSideCancellation: true);
     await($client->query('DROP TABLE IF EXISTS client_cancel_test'));
     await($client->query('
@@ -20,9 +20,15 @@ beforeEach(function (): void {
     $client->close();
 });
 
-afterEach(function (): void {
+afterAll(function (): void {
     $client = makeTransactionClient(enableServerSideCancellation: true);
     await($client->query('DROP TABLE IF EXISTS client_cancel_test'));
+    $client->close();
+});
+
+beforeEach(function (): void {
+    $client = makeTransactionClient(enableServerSideCancellation: true);
+    await($client->query('TRUNCATE TABLE client_cancel_test'));
     $client->close();
 });
 
@@ -35,9 +41,9 @@ describe('Transaction Non-Prepared Query Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query("INSERT INTO client_cancel_test (value) VALUES ('row1')"));
 
-        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(10)');
+        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(5)');
 
-        Loop::addTimer(2.0, function () use ($slowPromise): void {
+        Loop::addTimer(0.1, function () use ($slowPromise): void {
             $slowPromise->cancel();
         });
 
@@ -45,7 +51,7 @@ describe('Transaction Non-Prepared Query Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
+        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(3.5);
 
         $client->close();
     });
@@ -56,9 +62,9 @@ describe('Transaction Non-Prepared Query Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query("INSERT INTO client_cancel_test (value) VALUES ('row1')"));
 
-        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(10)');
+        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(5)');
 
-        Loop::addTimer(2.0, function () use ($slowPromise): void {
+        Loop::addTimer(0.1, function () use ($slowPromise): void {
             $slowPromise->cancel();
         });
 
@@ -84,9 +90,9 @@ describe('Transaction Non-Prepared Query Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query("INSERT INTO client_cancel_test (value) VALUES ('row1')"));
 
-        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(10)');
+        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(5)');
 
-        Loop::addTimer(2.0, function () use ($slowPromise): void {
+        Loop::addTimer(0.1, function () use ($slowPromise): void {
             $slowPromise->cancel();
         });
 
@@ -116,9 +122,9 @@ describe('Transaction Prepared Query Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query('INSERT INTO client_cancel_test (value) VALUES (?)', ['prepared_row1']));
 
-        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(?)', [10]);
+        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(?)', [5]);
 
-        Loop::addTimer(2.0, function () use ($slowPromise): void {
+        Loop::addTimer(0.1, function () use ($slowPromise): void {
             $slowPromise->cancel();
         });
 
@@ -126,7 +132,7 @@ describe('Transaction Prepared Query Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
+        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(3.5);
 
         $client->close();
     });
@@ -137,9 +143,9 @@ describe('Transaction Prepared Query Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query('INSERT INTO client_cancel_test (value) VALUES (?)', ['prepared_row1']));
 
-        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(?)', [10]);
+        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(?)', [5]);
 
-        Loop::addTimer(2.0, function () use ($slowPromise): void {
+        Loop::addTimer(0.1, function () use ($slowPromise): void {
             $slowPromise->cancel();
         });
 
@@ -167,9 +173,9 @@ describe('Transaction Prepared Query Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query('INSERT INTO client_cancel_test (value) VALUES (?)', ['prepared_row1']));
 
-        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(?)', [10]);
+        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(?)', [5]);
 
-        Loop::addTimer(2.0, function () use ($slowPromise): void {
+        Loop::addTimer(0.1, function () use ($slowPromise): void {
             $slowPromise->cancel();
         });
 
@@ -201,9 +207,9 @@ describe('Transaction Prepared Query Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query('INSERT INTO client_cancel_test (value) VALUES (?)', ['prepared_row1']));
 
-        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(?)', [10]);
+        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(?)', [5]);
 
-        Loop::addTimer(2.0, function () use ($slowPromise): void {
+        Loop::addTimer(0.1, function () use ($slowPromise): void {
             $slowPromise->cancel();
         });
 
@@ -234,9 +240,9 @@ describe('Transaction Stream Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query("INSERT INTO client_cancel_test (value) VALUES ('stream1'), ('stream2'), ('stream3')"));
 
-        $streamPromise = $tx->stream('SELECT value, SLEEP(10) as delay FROM client_cancel_test');
+        $streamPromise = $tx->stream('SELECT value, SLEEP(5) as delay FROM client_cancel_test');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.1, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -244,7 +250,7 @@ describe('Transaction Stream Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
+        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(3.5);
 
         $client->close();
     });
@@ -255,9 +261,9 @@ describe('Transaction Stream Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query("INSERT INTO client_cancel_test (value) VALUES ('stream1'), ('stream2'), ('stream3')"));
 
-        $streamPromise = $tx->stream('SELECT value, SLEEP(10) as delay FROM client_cancel_test');
+        $streamPromise = $tx->stream('SELECT value, SLEEP(5) as delay FROM client_cancel_test');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.1, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -289,9 +295,9 @@ describe('Transaction Stream Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query("INSERT INTO client_cancel_test (value) VALUES ('stream1'), ('stream2'), ('stream3')"));
 
-        $streamPromise = $tx->stream('SELECT value, SLEEP(10) as delay FROM client_cancel_test');
+        $streamPromise = $tx->stream('SELECT value, SLEEP(5) as delay FROM client_cancel_test');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.1, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -319,9 +325,9 @@ describe('Transaction Stream Cancellation', function (): void {
         $tx = await($client->beginTransaction());
         await($tx->query("INSERT INTO client_cancel_test (value) VALUES ('stream1'), ('stream2'), ('stream3')"));
 
-        $streamPromise = $tx->stream('SELECT value, SLEEP(10) as delay FROM client_cancel_test');
+        $streamPromise = $tx->stream('SELECT value, SLEEP(5) as delay FROM client_cancel_test');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.1, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -367,7 +373,6 @@ describe('Transaction Commit and Rollback Cancellation Resistance', function ():
         $result = await($client->query('SELECT COUNT(*) as count FROM client_cancel_test'));
         $count = (int) $result->fetchOne()['count'];
 
-        // Either commit resolved normally OR it was cancelled but still flushed to disk
         expect($count)->toBeGreaterThanOrEqual(1);
 
         $client->close();
