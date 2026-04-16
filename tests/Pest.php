@@ -116,6 +116,7 @@ function makePool(int $maxSize = 5, int $idleTimeout = 300, int $maxLifetime = 3
     return new PoolManager(
         config: testMysqlConfig(),
         maxSize: $maxSize,
+        minSize: 0, // explicitly disable pre-warming for tests
         idleTimeout: $idleTimeout,
         maxLifetime: $maxLifetime,
         enableServerSideCancellation: $enableServerSideCancellation
@@ -132,7 +133,7 @@ function makeClient(
 ): MysqlClient {
     return new MysqlClient(
         config: testMysqlConfig($enableServerSideCancellation),
-        minConnections: $maxConnections,
+        minConnections: 0, 
         maxConnections: $maxConnections,
         maxLifetime: $maxLifetime,
         idleTimeout: $idleTimeout,
@@ -145,7 +146,7 @@ function makeTransactionClient(int $maxConnections = 5, bool $enableServerSideCa
 {
     return new MysqlClient(
         config: testMysqlConfig(),
-        minConnections: $maxConnections,
+        minConnections: 0, 
         maxConnections: $maxConnections,
         enableServerSideCancellation: $enableServerSideCancellation
     );
@@ -155,6 +156,7 @@ function makeConcurrentClient(int $maxConnections = 10): MysqlClient
 {
     return new MysqlClient(
         config: testMysqlConfig(),
+        minConnections: 0, 
         maxConnections: $maxConnections,
     );
 }
@@ -177,6 +179,7 @@ function makeCompressedClient(
 
     return new MysqlClient(
         config: $params,
+        minConnections: 0, 
         maxConnections: $maxConnections,
         idleTimeout: $idleTimeout,
         maxLifetime: $maxLifetime,
@@ -234,7 +237,7 @@ function makeNoResetClient(int $maxConnections = 1): MysqlClient
 {
     return new MysqlClient(
         config: testMysqlConfig(),
-        minConnections: $maxConnections,
+        minConnections: 0, 
         maxConnections: $maxConnections
     );
 }
@@ -251,6 +254,7 @@ function makeResetClient(int $maxConnections = 1): MysqlClient
             'reset_connection' => true,
             'enable_server_side_cancellation' => false,
         ],
+        minConnections: 0, 
         maxConnections: $maxConnections
     );
 }
@@ -259,6 +263,7 @@ function makeWaiterClient(int $maxConnections = 2, int $maxWaiters = 5): MysqlCl
 {
     return new MysqlClient(
         config: testMysqlConfig(),
+        minConnections: 0, 
         maxConnections: $maxConnections,
         maxWaiters: $maxWaiters
     );
@@ -268,6 +273,7 @@ function makeTimeoutClient(int $maxConnections = 1, float $acquireTimeout = 1.0)
 {
     return new MysqlClient(
         config: testMysqlConfig(),
+        minConnections: 0, 
         maxConnections: $maxConnections,
         acquireTimeout: $acquireTimeout
     );
@@ -284,6 +290,7 @@ function makeMultiStatementClient(int $maxConnections = 5): MysqlClient
             'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
             'multi_statements' => true,
         ],
+        minConnections: 0, 
         maxConnections: $maxConnections
     );
 }
@@ -303,6 +310,7 @@ function makeOnConnectClient(
             'reset_connection' => $resetConnection,
             'enable_server_side_cancellation' => false,
         ],
+        minConnections: 0, 
         maxConnections: $maxConnections,
         onConnect: $onConnect,
     );
@@ -312,19 +320,16 @@ function makeManualTransactionClient(int $maxConnections = 1): MysqlClient
 {
     return new MysqlClient(
         config: testMysqlConfig(),
-        minConnections: 1,
+        minConnections: 0, 
         maxConnections: $maxConnections,
     );
 }
 
 function makeLockClient(): MysqlClient
 {
-    // Pinned to 1 connection so each client maps to exactly one physical
-    // connection — required for deadlock and lock timeout tests where two
-    // independent connections must hold locks against each other.
     return new MysqlClient(
         config: testMysqlConfig(),
-        minConnections: 1,
+        minConnections: 0, 
         maxConnections: 1,
     );
 }

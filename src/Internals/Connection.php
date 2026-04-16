@@ -192,6 +192,7 @@ class Connection
             'unix' => false,
             'dns' => true,
             'happy_eyeballs' => false,
+            "ipv6_pre_check" => false,
         ]);
 
         $socketUri = \sprintf('tcp://%s:%d', $this->params->host, $this->params->port);

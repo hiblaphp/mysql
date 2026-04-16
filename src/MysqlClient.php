@@ -64,30 +64,6 @@ final class MysqlClient implements SqlClientInterface
     use CancellationHelperTrait;
 
     /**
-     * {@inheritDoc}
-     */
-    public array $stats {
-        get {
-            $stats = $this->getPool()->stats;
-
-            /** @var array<string, bool|int> $clientStats */
-            $clientStats = [];
-
-            foreach ($stats as $key => $val) {
-                // Explicitly check for string to satisfy PHPStan generic array requirements
-                if (\is_string($key) && (\is_bool($val) || \is_int($val))) {
-                    $clientStats[$key] = $val;
-                }
-            }
-
-            $clientStats['statement_cache_enabled'] = $this->enableStatementCache;
-            $clientStats['statement_cache_size'] = $this->statementCacheSize;
-
-            return $clientStats;
-        }
-    }
-
-    /**
      * @var PoolManager|null
      */
     private ?PoolManager $pool = null;
@@ -147,7 +123,7 @@ final class MysqlClient implements SqlClientInterface
      */
     public function __construct(
         MysqlConfig|array|string $config,
-        int $minConnections = 1,
+        int $minConnections = 0,
         int $maxConnections = 10,
         int $idleTimeout = 60,
         int $maxLifetime = 3600,
@@ -225,6 +201,29 @@ final class MysqlClient implements SqlClientInterface
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public array $stats {
+        get {
+            $stats = $this->getPool()->stats;
+
+            /** @var array<string, bool|int> $clientStats */
+            $clientStats = [];
+
+            foreach ($stats as $key => $val) {
+                if (\is_string($key) && (\is_bool($val) || \is_int($val))) {
+                    $clientStats[$key] = $val;
+                }
+            }
+
+            $clientStats['statement_cache_enabled'] = $this->enableStatementCache;
+            $clientStats['statement_cache_size'] = $this->statementCacheSize;
+
+            return $clientStats;
+        }
+    }
+
+    /**
      * {@inheritdoc}
      *
      * @param string $sql SQL query with placeholders
@@ -244,8 +243,7 @@ final class MysqlClient implements SqlClientInterface
                 $innerPromise = $conn->prepare($sql)
                     ->then(function (PreparedStatement $stmt) use ($conn, $pool) {
                         return new ManagedPreparedStatement($stmt, $conn, $pool);
-                    })
-                ;
+                    });
 
                 return $innerPromise;
             })
@@ -255,8 +253,7 @@ final class MysqlClient implements SqlClientInterface
                 }
 
                 throw $e;
-            })
-        ;
+            });
 
         $this->bindInnerCancellation($promise, $innerPromise);
 
@@ -294,8 +291,7 @@ final class MysqlClient implements SqlClientInterface
                     $innerPromise = $this->getCachedStatement($conn, $sql)
                         ->then(function (PreparedStatement $stmt) use ($params) {
                             return $stmt->execute(array_values($params));
-                        })
-                    ;
+                        });
 
                     return $innerPromise;
                 }
@@ -307,8 +303,7 @@ final class MysqlClient implements SqlClientInterface
                                 $stmt->close();
                             })
                         ;
-                    })
-                ;
+                    });
 
                 return $innerPromise;
             })
@@ -316,8 +311,7 @@ final class MysqlClient implements SqlClientInterface
                 if ($connection !== null) {
                     $pool->release($connection);
                 }
-            })
-        ;
+            });
 
         $this->bindInnerCancellation($promise, $innerPromise);
 
@@ -336,7 +330,7 @@ final class MysqlClient implements SqlClientInterface
     {
         return $this->withCancellation(
             $this->query($sql, $params)
-                ->then(fn (ResultInterface $result) => $result->affectedRows)
+                ->then(fn(ResultInterface $result) => $result->affectedRows)
         );
     }
 
@@ -352,7 +346,7 @@ final class MysqlClient implements SqlClientInterface
     {
         return $this->withCancellation(
             $this->query($sql, $params)
-                ->then(fn (ResultInterface $result) => $result->lastInsertId)
+                ->then(fn(ResultInterface $result) => $result->lastInsertId)
         );
     }
 
@@ -368,7 +362,7 @@ final class MysqlClient implements SqlClientInterface
     {
         return $this->withCancellation(
             $this->query($sql, $params)
-                ->then(fn (ResultInterface $result) => $result->fetchOne())
+                ->then(fn(ResultInterface $result) => $result->fetchOne())
         );
     }
 
@@ -438,7 +432,7 @@ final class MysqlClient implements SqlClientInterface
         $pool = $this->getPool();
         $innerPromise = null;
 
-        $state = new class () {
+        $state = new class() {
             public ?Connection $connection = null;
 
             public bool $released = false;
@@ -462,8 +456,7 @@ final class MysqlClient implements SqlClientInterface
                     $innerPromise = $this->getCachedStatement($conn, $sql)
                         ->then(function (PreparedStatement $stmt) use ($params, $bufferSize) {
                             return $stmt->executeStream(array_values($params), $bufferSize);
-                        })
-                    ;
+                        });
                 }
 
                 $query = $innerPromise->then(
@@ -499,8 +492,7 @@ final class MysqlClient implements SqlClientInterface
 
                 return $query;
             })
-            ->finally($releaseOnce)
-        ;
+            ->finally($releaseOnce);
 
         $this->bindInnerCancellation($promise, $innerPromise);
 
@@ -529,7 +521,7 @@ final class MysqlClient implements SqlClientInterface
 
                     $promise = $isolationLevel !== null
                         ? $conn->query("SET TRANSACTION ISOLATION LEVEL {$isolationLevel->toSql()}")
-                        ->then(fn () => $conn->query('START TRANSACTION'))
+                        ->then(fn() => $conn->query('START TRANSACTION'))
                         : $conn->query('START TRANSACTION');
 
                     return $promise->then(function () use ($conn, $pool, $cache) {
@@ -577,7 +569,7 @@ final class MysqlClient implements SqlClientInterface
                     /** @var TransactionInterface $tx */
                     $tx = await($this->beginTransaction($options->isolationLevel));
 
-                    $result = await(async(fn () => $callback($tx)));
+                    $result = await(async(fn() => $callback($tx)));
 
                     await($tx->commit());
 
@@ -665,8 +657,7 @@ final class MysqlClient implements SqlClientInterface
                 $this->pool = null;
                 $this->statementCaches = null;
                 $this->closePromise = null;
-            })
-        ;
+            });
 
         return $this->closePromise;
     }
