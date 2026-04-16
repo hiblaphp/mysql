@@ -64,9 +64,7 @@ final class MysqlClient implements SqlClientInterface
     use CancellationHelperTrait;
 
     /**
-     * Statistics about the connection pool.
-     *
-     * @var array<string, int|bool>
+     * {@inheritDoc}
      */
     public array $stats {
         get {

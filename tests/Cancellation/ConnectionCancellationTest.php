@@ -16,9 +16,9 @@ describe('Query Cancellation', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
-        $queryPromise = $conn->query('SELECT SLEEP(10)');
+        $queryPromise = $conn->query('SELECT SLEEP(2)');
 
-        Loop::addTimer(2.0, function () use ($queryPromise): void {
+        Loop::addTimer(0.3, function () use ($queryPromise): void {
             $queryPromise->cancel();
         });
 
@@ -26,7 +26,7 @@ describe('Query Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
+        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(1.5);
 
         $conn->close();
     });
@@ -34,9 +34,9 @@ describe('Query Cancellation', function (): void {
     it('marks the connection as cancelled after a query is cancelled', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
 
-        $queryPromise = $conn->query('SELECT SLEEP(10)');
+        $queryPromise = $conn->query('SELECT SLEEP(2)');
 
-        Loop::addTimer(2.0, function () use ($queryPromise): void {
+        Loop::addTimer(0.3, function () use ($queryPromise): void {
             $queryPromise->cancel();
         });
 
@@ -52,9 +52,9 @@ describe('Query Cancellation', function (): void {
     it('can clear the cancelled flag after cancellation', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
 
-        $queryPromise = $conn->query('SELECT SLEEP(10)');
+        $queryPromise = $conn->query('SELECT SLEEP(2)');
 
-        Loop::addTimer(2.0, function () use ($queryPromise): void {
+        Loop::addTimer(0.3, function () use ($queryPromise): void {
             $queryPromise->cancel();
         });
 
@@ -77,9 +77,9 @@ describe('Prepared Statement Cancellation', function (): void {
         $startTime = microtime(true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
-        $execPromise = $stmt->execute([10]);
+        $execPromise = $stmt->execute([2]);
 
-        Loop::addTimer(2.0, function () use ($execPromise): void {
+        Loop::addTimer(0.3, function () use ($execPromise): void {
             $execPromise->cancel();
         });
 
@@ -87,7 +87,7 @@ describe('Prepared Statement Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
+        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(1.5);
 
         await($stmt->close());
         $conn->close();
@@ -97,9 +97,9 @@ describe('Prepared Statement Cancellation', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
-        $execPromise = $stmt->execute([10]);
+        $execPromise = $stmt->execute([2]);
 
-        Loop::addTimer(2.0, function () use ($execPromise): void {
+        Loop::addTimer(0.3, function () use ($execPromise): void {
             $execPromise->cancel();
         });
 
@@ -117,9 +117,9 @@ describe('Prepared Statement Cancellation', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
-        $execPromise = $stmt->execute([10]);
+        $execPromise = $stmt->execute([2]);
 
-        Loop::addTimer(2.0, function () use ($execPromise): void {
+        Loop::addTimer(0.3, function () use ($execPromise): void {
             $execPromise->cancel();
         });
 
@@ -148,9 +148,9 @@ describe('Stream Query Cancellation', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
         $startTime = microtime(true);
 
-        $streamPromise = $conn->streamQuery('SELECT SLEEP(10)');
+        $streamPromise = $conn->streamQuery('SELECT SLEEP(2)');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -158,7 +158,7 @@ describe('Stream Query Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
+        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(1.5);
 
         $conn->close();
     });
@@ -166,9 +166,9 @@ describe('Stream Query Cancellation', function (): void {
     it('marks the connection as cancelled after a stream is cancelled before first row', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
 
-        $streamPromise = $conn->streamQuery('SELECT SLEEP(10)');
+        $streamPromise = $conn->streamQuery('SELECT SLEEP(2)');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -184,9 +184,9 @@ describe('Stream Query Cancellation', function (): void {
     it('recovers and reuses the connection after a stream is cancelled before first row', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
 
-        $streamPromise = $conn->streamQuery('SELECT SLEEP(10)');
+        $streamPromise = $conn->streamQuery('SELECT SLEEP(2)');
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -339,9 +339,9 @@ describe('Execute Stream Cancellation', function (): void {
         $startTime = microtime(true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
-        $streamPromise = $stmt->executeStream([10]);
+        $streamPromise = $stmt->executeStream([2]);
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -349,7 +349,7 @@ describe('Execute Stream Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
+        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(1.5);
 
         await($stmt->close());
         $conn->close();
@@ -359,9 +359,9 @@ describe('Execute Stream Cancellation', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
-        $streamPromise = $stmt->executeStream([10]);
+        $streamPromise = $stmt->executeStream([2]);
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -379,9 +379,9 @@ describe('Execute Stream Cancellation', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
-        $streamPromise = $stmt->executeStream([10]);
+        $streamPromise = $stmt->executeStream([2]);
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -542,9 +542,9 @@ describe('Execute Stream Cancellation', function (): void {
         $conn = makeConnection(enableServerSideCancellation: true);
 
         $stmt = await($conn->prepare('SELECT SLEEP(?)'));
-        $streamPromise = $stmt->executeStream([5]);
+        $streamPromise = $stmt->executeStream([2]);
 
-        Loop::addTimer(1.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 

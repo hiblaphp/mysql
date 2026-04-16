@@ -162,7 +162,7 @@ final class HandshakeHandler
 
             $payload = $writer->toString();
             $len = \strlen($payload);
-            $header = substr(pack('V', $len), 0, 3) . \chr($this->sequenceId);
+            $header = substr(pack('V', $len), 0, 3) . \chr($this->sequenceId & 0xFF);
             $packet = $header . $payload;
 
             $this->socket->write($packet);
@@ -178,12 +178,6 @@ final class HandshakeHandler
 
     private function configureSslAndEnable(int $clientCaps, int $charsetId): void
     {
-        if (! method_exists($this->socket, 'enableEncryption')) {
-            $this->promise->reject(new ConnectionException('Socket does not support SSL/TLS upgrade. MySQL requires STARTTLS capability for encrypted connections.'));
-
-            return;
-        }
-
         try {
             $sslOptions = [
                 'verify_peer' => $this->params->sslVerify,
@@ -333,7 +327,7 @@ final class HandshakeHandler
     private function writePacket(string $payload): void
     {
         $len = \strlen($payload);
-        $header = substr(pack('V', $len), 0, 3) . \chr($this->sequenceId);
+        $header = substr(pack('V', $len), 0, 3) . \chr($this->sequenceId & 0xFF);
         $this->socket->write($header . $payload);
         $this->sequenceId++;
     }

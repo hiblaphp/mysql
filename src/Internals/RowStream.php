@@ -97,6 +97,8 @@ class RowStream implements MysqlRowStream
     /**
      * The command queue promise used to propagate cancellation (KILL QUERY).
      *
+     * @var PromiseInterface<mixed>|null
+     *
      * @internal
      */
     public ?PromiseInterface $commandQueuePromise {
@@ -108,9 +110,9 @@ class RowStream implements MysqlRowStream
     /**
      * The backpressure handler for controlling socket flow.
      *
-     * @internal
-     *
      * @var (\Closure(bool): void)|null
+     *
+     * @internal
      */
     public ?\Closure $backpressureHandler {
         set {
@@ -225,6 +227,8 @@ class RowStream implements MysqlRowStream
     /**
      * Pushes a row into the stream buffer.
      *
+     * @param array<string, mixed> $row
+     *
      * @internal
      */
     public function push(array $row): void
@@ -311,9 +315,9 @@ class RowStream implements MysqlRowStream
     /**
      * Returns a promise that resolves when the underlying database command is complete.
      *
-     * @internal
-     *
      * @return Promise<void>
+     *
+     * @internal
      */
     public function waitForCommand(): Promise
     {

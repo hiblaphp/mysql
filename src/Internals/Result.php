@@ -16,12 +16,12 @@ use Rcalicdan\MySQLBinaryProtocol\Frame\Result\ColumnDefinition;
 class Result implements MysqlResult
 {
     /**
-     * The number of rows returned by SELECT queries.
+     * {@inheritDoc}
      */
     public readonly int $rowCount;
 
     /**
-     * The number of columns in the result set.
+     * {@inheritDoc}
      */
     public readonly int $columnCount;
 
@@ -33,9 +33,7 @@ class Result implements MysqlResult
     public readonly array $fields;
 
     /**
-     * The column names from the result set.
-     *
-     * @var array<int, string>
+     * {@inheritDoc}
      */
     public array $columns {
         get => array_map(fn (MysqlColumnDefinition $col) => $col->name, $this->fields);
@@ -45,6 +43,14 @@ class Result implements MysqlResult
 
     private ?MysqlResult $nextResult = null;
 
+    /**
+     * @param int $affectedRows Get the affected row that was modified by UPDATE, DELETE, INSERT statement etc.
+     * @param int $lastInsertId Get the last inserted ID.
+     * @param int $warningCount Get the warning count.
+     * @param int $connectionId Get the connection ID.
+     * @param array<int, ColumnDefinition> $columnDefinitions
+     * @param array<int, array<string, mixed>> $rows
+     */
     public function __construct(
         public readonly int $affectedRows = 0,
         public readonly int $lastInsertId = 0,
@@ -56,14 +62,18 @@ class Result implements MysqlResult
         $this->rowCount = \count($this->rows);
         $this->columnCount = \count($this->columnDefinitions);
 
-        $this->fields = array_map(
+        /** @var array<int, MysqlColumnDefinition> $fields */
+        $fields = array_map(
             fn (ColumnDefinition $col) => new MysqlColumnDefinition($col),
             $this->columnDefinitions
         );
+
+        $this->fields = $fields;
     }
 
     /**
      * @internal
+     *
      * Links the next result set to this one.
      */
     public function setNextResult(MysqlResult $result): void
@@ -72,7 +82,7 @@ class Result implements MysqlResult
     }
 
     /**
-     * Returns the next result set if it exists.
+     * {@inheritDoc}
      */
     public function nextResult(): ?MysqlResult
     {
@@ -80,7 +90,7 @@ class Result implements MysqlResult
     }
 
     /**
-     * Checks if any rows were affected by the operation.
+     * {@inheritDoc}
      */
     public function hasAffectedRows(): bool
     {
@@ -88,7 +98,7 @@ class Result implements MysqlResult
     }
 
     /**
-     * Checks if an auto-increment ID was generated.
+     * {@inheritDoc}
      */
     public function hasLastInsertId(): bool
     {
@@ -96,7 +106,7 @@ class Result implements MysqlResult
     }
 
     /**
-     * Checks if the result set is empty.
+     * {@inheritDoc}
      */
     public function isEmpty(): bool
     {
@@ -104,9 +114,7 @@ class Result implements MysqlResult
     }
 
     /**
-     * Fetches the next row as an associative array.
-     *
-     * @return array<string, mixed>|null
+     * {@inheritDoc}
      */
     public function fetchAssoc(): ?array
     {
@@ -114,14 +122,14 @@ class Result implements MysqlResult
             return null;
         }
 
-        /** @var array<string, mixed> */
-        return $this->rows[$this->position++];
+        /** @var array<string, mixed> $row */
+        $row = $this->rows[$this->position++];
+
+        return $row;
     }
 
     /**
-     * Fetches all rows.
-     *
-     * @return array<int, array<string, mixed>>
+     * {@inheritDoc}
      */
     public function fetchAll(): array
     {
@@ -129,27 +137,26 @@ class Result implements MysqlResult
     }
 
     /**
-     * Fetches a single column from all rows.
-     *
-     * @return array<int, mixed>
+     * {@inheritDoc}
      */
     public function fetchColumn(string|int $column = 0): array
     {
-        return array_map(fn ($row) => $row[$column] ?? null, $this->rows);
+        return array_map(fn (array $row) => $row[$column] ?? null, $this->rows);
     }
 
     /**
-     * Fetches the first row.
-     *
-     * @return array<string, mixed>|null
+     * {@inheritDoc}
      */
     public function fetchOne(): ?array
     {
-        return $this->rows[0] ?? null;
+        /** @var array<string, mixed>|null $row */
+        $row = $this->rows[0] ?? null;
+
+        return $row;
     }
 
     /**
-     * Allows iteration in foreach loops.
+     * {@inheritDoc}
      */
     public function getIterator(): \Traversable
     {
