@@ -36,10 +36,10 @@ describe('Client Stream Cancellation', function (): void {
         $startTime = microtime(true);
 
         $streamPromise = $client->stream(
-            'SELECT value, SLEEP(10) AS delay FROM client_stream_test'
+            'SELECT value, SLEEP(2) AS delay FROM client_stream_test'
         );
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -47,7 +47,7 @@ describe('Client Stream Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
+        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(1.5);
 
         $client->close();
     });
@@ -56,10 +56,10 @@ describe('Client Stream Cancellation', function (): void {
         $client = makeClient(enableServerSideCancellation: true);
 
         $streamPromise = $client->stream(
-            'SELECT value, SLEEP(10) AS delay FROM client_stream_test'
+            'SELECT value, SLEEP(2) AS delay FROM client_stream_test'
         );
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -67,7 +67,7 @@ describe('Client Stream Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        await(delay(0.5));
+        await(delay(0.1));
 
         $result = await($client->query('SELECT "Alive" AS status'));
 
@@ -82,10 +82,10 @@ describe('Client Stream Cancellation', function (): void {
 
         $streamPromise = $client->stream(
             'SELECT value, SLEEP(?) AS delay FROM client_stream_test',
-            [10]
+            [2]
         );
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -93,7 +93,7 @@ describe('Client Stream Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(5.0);
+        expect(round(microtime(true) - $startTime, 2))->toBeLessThan(1.5);
 
         $client->close();
     });
@@ -103,10 +103,10 @@ describe('Client Stream Cancellation', function (): void {
 
         $streamPromise = $client->stream(
             'SELECT value, SLEEP(?) AS delay FROM client_stream_test',
-            [10]
+            [2]
         );
 
-        Loop::addTimer(2.0, function () use ($streamPromise): void {
+        Loop::addTimer(0.3, function () use ($streamPromise): void {
             $streamPromise->cancel();
         });
 
@@ -114,7 +114,7 @@ describe('Client Stream Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        await(delay(0.5));
+        await(delay(0.1));
 
         $result = await($client->query('SELECT ? AS echo_val', ['StreamOk']));
 
@@ -158,7 +158,7 @@ describe('Client Stream Cancellation', function (): void {
             // expected
         }
 
-        await(delay(0.5));
+        await(delay(0.1));
 
         $result = await($client->query('SELECT COUNT(*) AS count FROM client_stream_test'));
 
@@ -208,11 +208,11 @@ describe('Client Stream Cancellation', function (): void {
         $streamPromises = [];
         for ($i = 0; $i < 5; $i++) {
             $streamPromises[] = $client->stream(
-                'SELECT value, SLEEP(10) AS delay FROM client_stream_test'
+                'SELECT value, SLEEP(2) AS delay FROM client_stream_test'
             );
         }
 
-        Loop::addTimer(2.0, function () use ($streamPromises): void {
+        Loop::addTimer(0.3, function () use ($streamPromises): void {
             foreach ($streamPromises as $p) {
                 $p->cancel();
             }
@@ -238,11 +238,11 @@ describe('Client Stream Cancellation', function (): void {
         $streamPromises = [];
         for ($i = 0; $i < 5; $i++) {
             $streamPromises[] = $client->stream(
-                'SELECT value, SLEEP(10) AS delay FROM client_stream_test'
+                'SELECT value, SLEEP(2) AS delay FROM client_stream_test'
             );
         }
 
-        Loop::addTimer(2.0, function () use ($streamPromises): void {
+        Loop::addTimer(0.3, function () use ($streamPromises): void {
             foreach ($streamPromises as $p) {
                 $p->cancel();
             }
@@ -256,7 +256,7 @@ describe('Client Stream Cancellation', function (): void {
             }
         }
 
-        await(delay(5.0));
+        await(delay(0.5));
 
         $result = await($client->query('SELECT "PoolRecovered" AS status'));
 
