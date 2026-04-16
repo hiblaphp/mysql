@@ -129,11 +129,12 @@ function makeClient(
     int $maxLifetime = 3600,
     int $statementCacheSize = 256,
     bool $enableStatementCache = true,
-    bool $enableServerSideCancellation = false
+    bool $enableServerSideCancellation = false,
+    int $minConnections = 0
 ): MysqlClient {
     return new MysqlClient(
         config: testMysqlConfig($enableServerSideCancellation),
-        minConnections: 0, 
+        minConnections: $minConnections, 
         maxConnections: $maxConnections,
         maxLifetime: $maxLifetime,
         idleTimeout: $idleTimeout,

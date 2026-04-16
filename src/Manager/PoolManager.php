@@ -606,7 +606,6 @@ class PoolManager
         $this->pendingWaiters = 0;
         $this->connectionLastUsed = [];
         $this->connectionCreatedAt = [];
-        $this->isClosing = false;
     }
 
     /**
@@ -729,7 +728,6 @@ class PoolManager
         $this->activeConnections = 0;
         $this->connectionLastUsed = [];
         $this->connectionCreatedAt = [];
-        $this->isGracefulShutdown = false;
 
         if ($this->shutdownPromise !== null && $this->shutdownPromise->isPending()) {
             $this->shutdownPromise->resolve(null);
@@ -990,6 +988,12 @@ class PoolManager
      *
      * @return Promise<MysqlConnection>
      */
+    /**
+     * Creates a new connection and resolves the returned promise on success.
+     * Runs the onConnect hook before handing the connection to the caller.
+     *
+     * @return Promise<MysqlConnection>
+     */
     private function createNewConnection(): Promise
     {
         $this->activeConnections++;
@@ -1000,15 +1004,38 @@ class PoolManager
         MysqlConnection::create($this->MysqlConfig, $this->connector)
             ->then(
                 function (MysqlConnection $connection) use ($promise): void {
+                    // Abort immediately if the pool was force-closed mid-handshake
+                    if ($this->isClosing) {
+                        $connection->close();
+                        $this->activeConnections--;
+                        $promise->reject(new PoolException('Pool is being closed'));
+                        $this->checkShutdownComplete();
+                        return;
+                    }
+
                     $connId = spl_object_id($connection);
                     $this->connectionCreatedAt[$connId] = (int) hrtime(true);
                     $this->activeConnectionsMap[$connId] = $connection;
 
                     $this->runOnConnectHook($connection)->then(
-                        fn() => $promise->resolve($connection),
+                        function () use ($promise, $connection): void {
+                            // Check again in case pool closed during the async hook
+                            if ($this->isClosing) {
+                                $this->removeConnection($connection);
+                                $promise->reject(new PoolException('Pool is being closed'));
+                                return;
+                            }
+
+                            // If the caller cancelled the query while connecting, release 
+                            // cleanly so it can be destroyed or given to the next waiter.
+                            if ($promise->isCancelled()) {
+                                $this->releaseClean($connection);
+                                return;
+                            }
+
+                            $promise->resolve($connection);
+                        },
                         function (Throwable $e) use ($promise, $connection): void {
-                            // Hook failed — drop the connection so the pool never
-                            // hands out a connection in an unknown session state.
                             $this->removeConnection($connection);
                             $promise->reject($e);
                         }
@@ -1042,24 +1069,35 @@ class PoolManager
         MysqlConnection::create($this->MysqlConfig, $this->connector)
             ->then(
                 function (MysqlConnection $connection) use ($waiter): void {
+                    if ($this->isClosing) {
+                        $connection->close();
+                        $this->activeConnections--;
+                        $waiter->reject(new PoolException('Pool is being closed'));
+                        $this->checkShutdownComplete();
+                        return;
+                    }
+
                     $connId = spl_object_id($connection);
                     $this->connectionCreatedAt[$connId] = (int) hrtime(true);
                     $this->activeConnectionsMap[$connId] = $connection;
 
                     $this->runOnConnectHook($connection)->then(
                         function () use ($connection, $waiter): void {
-                            if ($waiter->isCancelled()) {
-                                // Waiter gave up while hook was running — park cleanly.
-                                $this->releaseClean($connection);
+                            if ($this->isClosing) {
+                                $this->removeConnection($connection);
+                                $waiter->reject(new PoolException('Pool is being closed'));
+                                return;
+                            }
 
+                            if ($waiter->isCancelled()) {
+                                // Waiter gave up while hook was running, park cleanly.
+                                $this->releaseClean($connection);
                                 return;
                             }
 
                             $waiter->resolve($connection);
                         },
                         function (Throwable $e) use ($connection, $waiter): void {
-                            // Hook failed — drop the connection and propagate the
-                            // error to the waiter so it does not hang indefinitely.
                             $this->removeConnection($connection);
                             $waiter->reject($e);
                         }
