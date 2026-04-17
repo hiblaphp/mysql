@@ -28,7 +28,7 @@ describe('PoolManager', function (): void {
         });
 
         it('accepts a MysqlConfig instance directly', function (): void {
-            $pool = new PoolManager(testMysqlConfig(), 3);
+            $pool = new PoolManager(testMysqlConfig(), maxSize: 3);
             $stats = $pool->stats;
 
             expect($stats['max_size'])->toBe(3);
@@ -43,7 +43,7 @@ describe('PoolManager', function (): void {
                 'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
                 'username' => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
                 'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
-            ], 3);
+            ], maxSize: 3);
 
             expect($pool->stats['max_size'])->toBe(3);
 
@@ -59,7 +59,7 @@ describe('PoolManager', function (): void {
 
             $pool = new PoolManager(
                 "mysql://{$username}:{$password}@{$host}:{$port}/{$database}",
-                3
+                maxSize: 3
             );
 
             expect($pool->stats['max_size'])->toBe(3);
@@ -68,37 +68,37 @@ describe('PoolManager', function (): void {
         });
 
         it('throws InvalidArgumentException when maxSize is zero', function (): void {
-            expect(fn () => makePool(0))
+            expect(fn () => makePool(maxSize: 0))
                 ->toThrow(InvalidArgumentException::class, 'Pool max size must be greater than 0')
             ;
         });
 
         it('throws InvalidArgumentException when maxSize is negative', function (): void {
-            expect(fn () => makePool(-1))
+            expect(fn () => makePool(maxSize: -1))
                 ->toThrow(InvalidArgumentException::class, 'Pool max size must be greater than 0')
             ;
         });
 
         it('throws InvalidArgumentException when idleTimeout is zero', function (): void {
-            expect(fn () => new PoolManager(testMysqlConfig(), 5, 0))
+            expect(fn () => new PoolManager(config: testMysqlConfig(), maxSize: 5, idleTimeout: 0))
                 ->toThrow(InvalidArgumentException::class, 'Idle timeout must be greater than 0')
             ;
         });
 
         it('throws InvalidArgumentException when idleTimeout is negative', function (): void {
-            expect(fn () => new PoolManager(testMysqlConfig(), 5, -1))
+            expect(fn () => new PoolManager(config: testMysqlConfig(), maxSize: 5, idleTimeout: -1))
                 ->toThrow(InvalidArgumentException::class, 'Idle timeout must be greater than 0')
             ;
         });
 
         it('throws InvalidArgumentException when maxLifetime is zero', function (): void {
-            expect(fn () => new PoolManager(testMysqlConfig(), 5, 300, 0))
+            expect(fn () => new PoolManager(config: testMysqlConfig(), maxSize: 5, maxLifetime: 0))
                 ->toThrow(InvalidArgumentException::class, 'Max lifetime must be greater than 0')
             ;
         });
 
         it('throws InvalidArgumentException when maxLifetime is negative', function (): void {
-            expect(fn () => new PoolManager(testMysqlConfig(), 5, 300, -1))
+            expect(fn () => new PoolManager(config: testMysqlConfig(), maxSize: 5, maxLifetime: -1))
                 ->toThrow(InvalidArgumentException::class, 'Max lifetime must be greater than 0')
             ;
         });
@@ -112,7 +112,7 @@ describe('PoolManager', function (): void {
                 'happy_eyeballs' => false,
             ]);
 
-            $pool = new PoolManager(testMysqlConfig(), 3, 300, 3600, $connector);
+            $pool = new PoolManager(config: testMysqlConfig(), maxSize: 3, connector: $connector);
             $conn = await($pool->get());
 
             expect($conn)->toBeInstanceOf(Connection::class)
@@ -610,13 +610,16 @@ describe('PoolManager', function (): void {
     describe('Idle Timeout and Max Lifetime', function (): void {
 
         it('discards a connection that exceeds idle timeout on next get', function (): void {
-            $pool = new PoolManager(testMysqlConfig(), 5, 1, 3600);
+            $pool = new PoolManager(config: testMysqlConfig(), maxSize: 5, idleTimeout: 1, maxLifetime: 3600);
             $conn = await($pool->get());
             $pool->release($conn);
 
             expect($pool->stats['pooled_connections'])->toBe(1);
 
-            sleep(1.1);
+            $sleepResult = sleep(1.1);
+            if ($sleepResult instanceof \Hibla\Promise\Interfaces\PromiseInterface) {
+                await($sleepResult);
+            }
 
             $newConn = await($pool->get());
 
@@ -627,10 +630,13 @@ describe('PoolManager', function (): void {
         });
 
         it('discards a connection that exceeds max lifetime on release', function (): void {
-            $pool = new PoolManager(testMysqlConfig(), 5, 300, 1);
+            $pool = new PoolManager(config: testMysqlConfig(), maxSize: 5, idleTimeout: 300, maxLifetime: 1);
             $conn = await($pool->get());
 
-            sleep(1.1);
+            $sleepResult = sleep(1.1);
+            if ($sleepResult instanceof \Hibla\Promise\Interfaces\PromiseInterface) {
+                await($sleepResult);
+            }
 
             $pool->release($conn);
 
@@ -642,11 +648,14 @@ describe('PoolManager', function (): void {
         });
 
         it('discards expired connection on get and creates a fresh one', function (): void {
-            $pool = new PoolManager(testMysqlConfig(), 5, 300, 1);
+            $pool = new PoolManager(config: testMysqlConfig(), maxSize: 5, idleTimeout: 300, maxLifetime: 1);
             $conn = await($pool->get());
             $pool->release($conn);
 
-            sleep(1.1);
+            $sleepResult = sleep(1.1);
+            if ($sleepResult instanceof \Hibla\Promise\Interfaces\PromiseInterface) {
+                await($sleepResult);
+            }
 
             $newConn = await($pool->get());
 
@@ -669,6 +678,9 @@ describe('PoolManager', function (): void {
             expect($pool->stats['pooled_connections'])->toBe(1);
 
             unset($pool);
+            
+            // Force GC just in case
+            gc_collect_cycles();
 
             expect($conn->isClosed())->toBeTrue();
         });
@@ -686,6 +698,9 @@ describe('PoolManager', function (): void {
             expect($pool->stats['pooled_connections'])->toBe(3);
 
             unset($pool);
+            
+            // Force GC just in case
+            gc_collect_cycles();
 
             expect($conn1->isClosed())->toBeTrue()
                 ->and($conn2->isClosed())->toBeTrue()
@@ -706,10 +721,12 @@ describe('PoolManager', function (): void {
             expect($pool->stats['waiting_requests'])->toBe(1);
 
             unset($pool);
+            
+            gc_collect_cycles();
 
             try {
                 await($chained);
-            } catch (Throwable) {
+            } catch (Throwable $e) {
                 // expected
             }
 

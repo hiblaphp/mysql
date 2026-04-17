@@ -388,26 +388,32 @@ class PoolManager
         /** @var Promise<MysqlConnection> $waiterPromise */
         $waiterPromise = new Promise();
 
+        $weakSelf = \WeakReference::create($this);
+
         if ($this->acquireTimeout > 0.0) {
-            $timerId = Loop::addTimer($this->acquireTimeout, function () use ($waiterPromise): void {
+            $timerId = Loop::addTimer($this->acquireTimeout, function () use ($waiterPromise, $weakSelf): void {
                 if ($waiterPromise->isPending()) {
                     $waiterPromise->reject(new TimeoutException(
-                        $this->acquireTimeout
+                        $weakSelf->get()?->acquireTimeout ?? 0.0
                     ));
                 }
             });
 
-            // Decrement the real-time counter and cancel the timer regardless of
-            // outcome (success, failure, or user cancellation).
-            $waiterPromise->finally(function () use ($timerId): void {
-                $this->pendingWaiters--;
+            $waiterPromise->finally(static function () use ($timerId, $weakSelf): void {
                 Loop::cancelTimer($timerId);
+                $pool = $weakSelf->get();
+                if ($pool !== null) {
+                    $pool->pendingWaiters--;
+                }
             })->catch(static function (): void {
                 // Ignore timeout rejections.
             });
         } else {
-            $waiterPromise->finally(function (): void {
-                $this->pendingWaiters--;
+            $waiterPromise->finally(static function () use ($weakSelf): void {
+                $pool = $weakSelf->get();
+                if ($pool !== null) {
+                    $pool->pendingWaiters--;
+                }
             })->catch(static function (): void {
                 // Ignore cancellation or timeout rejections.
             });
