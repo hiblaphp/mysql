@@ -123,13 +123,6 @@ class PoolManager
     private PoolException $exhaustedException;
 
     /**
-     * Real-time count of pending waiters. Decremented via finally() hook on
-     * the waiter promise, so it reflects the true number of requests still
-     * waiting regardless of how the promise settles (resolve, reject, cancel).
-     */
-    private int $pendingWaiters = 0;
-
-    /**
      * @var array<int, int> Last-used timestamp (nanoseconds) keyed by spl_object_id.
      */
     private array $connectionLastUsed = [];
@@ -282,6 +275,18 @@ class PoolManager
         $this->ensureMinConnections();
     }
 
+    private int $pendingWaitersCount {
+        get {
+            $count = 0;
+            foreach ($this->waiters as $waiter) {
+                if ($waiter->isPending()) {
+                    $count++;
+                }
+            }
+            return $count;
+        }
+    }
+
     /**
      * Retrieves statistics about the current state of the connection pool.
      *
@@ -293,7 +298,7 @@ class PoolManager
                 'active_connections' => $this->activeConnections,
                 'pooled_connections' => $this->pool->count(),
                 'min_size' => $this->minSize,
-                'waiting_requests' => $this->pendingWaiters,
+                'waiting_requests' => $this->pendingWaitersCount,
                 'draining_connections' => \count($this->drainingConnections),
                 'max_size' => $this->maxSize,
                 'max_waiters' => $this->maxWaiters,
@@ -380,7 +385,7 @@ class PoolManager
             return $this->createNewConnection();
         }
 
-        if ($this->maxWaiters > 0 && $this->pendingWaiters >= $this->maxWaiters) {
+        if ($this->maxWaiters > 0 && $this->pendingWaitersCount >= $this->maxWaiters) {
             return Promise::rejected($this->exhaustedException);
         }
 
@@ -388,39 +393,24 @@ class PoolManager
         /** @var Promise<MysqlConnection> $waiterPromise */
         $waiterPromise = new Promise();
 
-        $weakSelf = \WeakReference::create($this);
-
         if ($this->acquireTimeout > 0.0) {
-            $timerId = Loop::addTimer($this->acquireTimeout, function () use ($waiterPromise, $weakSelf): void {
+            $timeout = $this->acquireTimeout;
+            $timerId = Loop::addTimer($timeout, static function () use ($waiterPromise, $timeout): void {
                 if ($waiterPromise->isPending()) {
-                    $waiterPromise->reject(new TimeoutException(
-                        $weakSelf->get()?->acquireTimeout ?? 0.0
-                    ));
+                    $waiterPromise->reject(new TimeoutException($timeout));
                 }
             });
 
-            $waiterPromise->finally(static function () use ($timerId, $weakSelf): void {
+            // Cancel the timer regardless of outcome.
+            // Notice: no $this is captured here, allowing perfect Garbage Collection!
+            $waiterPromise->finally(static function () use ($timerId): void {
                 Loop::cancelTimer($timerId);
-                $pool = $weakSelf->get();
-                if ($pool !== null) {
-                    $pool->pendingWaiters--;
-                }
             })->catch(static function (): void {
-                // Ignore timeout rejections.
-            });
-        } else {
-            $waiterPromise->finally(static function () use ($weakSelf): void {
-                $pool = $weakSelf->get();
-                if ($pool !== null) {
-                    $pool->pendingWaiters--;
-                }
-            })->catch(static function (): void {
-                // Ignore cancellation or timeout rejections.
+                // Ignore any errors.
             });
         }
 
         $this->waiters->enqueue($waiterPromise);
-        $this->pendingWaiters++;
 
         return $waiterPromise;
     }
@@ -609,7 +599,6 @@ class PoolManager
         $this->pool = new SplQueue();
         $this->waiters = new SplQueue();
         $this->activeConnections = 0;
-        $this->pendingWaiters = 0;
         $this->connectionLastUsed = [];
         $this->connectionCreatedAt = [];
     }
