@@ -18,7 +18,7 @@
         "hiblaphp/socket": "^1.0",
         "hiblaphp/async": "^1.0",
         "hiblaphp/cancellation": "^1.0",
-        "hiblaphp/sql": "dev-main"
+        "hiblaphp/sql": "^1.0"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.0",
