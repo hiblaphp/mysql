@@ -10,7 +10,7 @@
         }
     },
     "require": {
-        "rcalicdan/mysql-binary-protocol": "dev-main",
+        "rcalicdan/mysql-binary-protocol": "^3.0",
         "hiblaphp/event-loop": "^1.0",
         "hiblaphp/promise": "^1.0",
         "hiblaphp/stream": "^1.0",
