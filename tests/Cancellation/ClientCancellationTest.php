@@ -114,7 +114,7 @@ describe('Client Waiter Cancellation', function (): void {
         foreach ($holders as $holder) {
             $holder->cancel();
         }
-        
+
         await(delay(0.2));
         await($client->closeAsync());
     });

@@ -12,16 +12,20 @@ use Hibla\Socket\Interfaces\ConnectionInterface as SocketConnection;
 use Hibla\Sql\Exceptions\AuthenticationException;
 use Hibla\Sql\Exceptions\ConnectionException;
 use Rcalicdan\MySQLBinaryProtocol\Auth\AuthScrambler;
-use Rcalicdan\MySQLBinaryProtocol\Buffer\Writer\BufferPayloadWriterFactory;
-use Rcalicdan\MySQLBinaryProtocol\Constants\AuthPacketType;
 use Rcalicdan\MySQLBinaryProtocol\Constants\CapabilityFlags;
 use Rcalicdan\MySQLBinaryProtocol\Constants\CharsetMap;
+use Rcalicdan\MySQLBinaryProtocol\Frame\Handshake\AuthMoreData;
+use Rcalicdan\MySQLBinaryProtocol\Frame\Handshake\AuthResponseParser;
+use Rcalicdan\MySQLBinaryProtocol\Frame\Handshake\AuthSwitchRequest;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Handshake\HandshakeParser;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Handshake\HandshakeResponse41;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Handshake\HandshakeV10;
+use Rcalicdan\MySQLBinaryProtocol\Frame\Handshake\SslRequest;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Response\ErrPacket;
+use Rcalicdan\MySQLBinaryProtocol\Frame\Response\OkPacket;
 use Rcalicdan\MySQLBinaryProtocol\Packet\PayloadReader;
 use Rcalicdan\MySQLBinaryProtocol\Packet\UncompressedPacketReader;
+use Rcalicdan\MySQLBinaryProtocol\Packet\UncompressedPacketWriter;
 
 /**
  * Handles MySQL handshake protocol including SSL/TLS upgrade and Compression negotiation.
@@ -49,6 +53,8 @@ final class HandshakeHandler
      */
     private Promise $promise;
 
+    private UncompressedPacketWriter $packetWriter;
+
     public function __construct(
         private readonly SocketConnection $socket,
         private readonly MysqlConfig $params
@@ -56,6 +62,7 @@ final class HandshakeHandler
         /** @var Promise<int> $promise */
         $promise = new Promise();
         $this->promise = $promise;
+        $this->packetWriter = new UncompressedPacketWriter();
     }
 
     /**
@@ -106,12 +113,10 @@ final class HandshakeHandler
     private function handleInitialHandshake(PayloadReader $reader, int $length, int $seq): void
     {
         try {
-            $parser = new HandshakeParser();
-            $frame = $parser->parse($reader, $length, $seq);
+            $frame = new HandshakeParser()->parse($reader, $length, $seq);
 
             if ($frame instanceof ErrPacket) {
-                $exception = new ConnectionException("MySQL Connection Error [{$frame->errorCode}]: {$frame->errorMessage}", $frame->errorCode);
-                $this->promise->reject($exception);
+                $this->promise->reject(new ConnectionException("MySQL Connection Error [{$frame->errorCode}]: {$frame->errorMessage}", $frame->errorCode));
 
                 return;
             }
@@ -126,8 +131,6 @@ final class HandshakeHandler
             $this->sequenceId = $seq + 1;
 
             $clientCaps = $this->calculateCapabilities();
-
-            // Resolve the charset ID from the string config
             $charsetId = CharsetMap::getCollationId($this->params->charset);
 
             if (($clientCaps & CapabilityFlags::CLIENT_COMPRESS) !== 0) {
@@ -146,27 +149,15 @@ final class HandshakeHandler
                 $this->sendAuthResponse($clientCaps, $charsetId);
             }
         } catch (\Throwable $e) {
-            $wrappedException = new ConnectionException('Failed to process initial handshake: ' . $e->getMessage(), (int)$e->getCode(), $e);
-            $this->promise->reject($wrappedException);
+            $this->promise->reject(new ConnectionException('Failed to process initial handshake: ' . $e->getMessage(), (int)$e->getCode(), $e));
         }
     }
 
     private function performSslUpgrade(int $clientCaps, int $charsetId): void
     {
         try {
-            $writer = (new BufferPayloadWriterFactory())->create();
-            $writer->writeUInt32($clientCaps | CapabilityFlags::CLIENT_SSL);
-            $writer->writeUInt32(0x1000000);
-            $writer->writeUInt8($charsetId);
-            $writer->writeZeros(23);
-
-            $payload = $writer->toString();
-            $len = \strlen($payload);
-            $header = substr(pack('V', $len), 0, 3) . \chr($this->sequenceId & 0xFF);
-            $packet = $header . $payload;
-
-            $this->socket->write($packet);
-            $this->sequenceId++;
+            $payload = new SslRequest()->build($clientCaps, $charsetId);
+            $this->writePacket($payload);
 
             Loop::setImmediate(function () use ($clientCaps, $charsetId) {
                 $this->configureSslAndEnable($clientCaps, $charsetId);
@@ -232,49 +223,29 @@ final class HandshakeHandler
 
     private function handleAuthResponse(PayloadReader $reader, int $length, int $seq): void
     {
-        $this->sequenceId = $seq + 1;
-        $firstByte = $reader->readFixedInteger(1);
+        try {
+            $frame = new AuthResponseParser()->parse($reader, $length, $seq);
+            $this->sequenceId = $seq + 1;
 
-        if ($firstByte === AuthPacketType::OK) {
-            $this->handleAuthSuccess();
-
-            return;
-        }
-        if ($firstByte === AuthPacketType::ERR) {
-            $this->handleAuthError($reader);
-
-            return;
-        }
-        if ($firstByte === AuthPacketType::AUTH_SWITCH_REQUEST) {
-            $this->handleAuthPluginSwitch($reader);
-
-            return;
-        }
-        if ($firstByte === AuthPacketType::AUTH_MORE_DATA) {
-            $this->handleAuthMoreData($reader, $length);
+            if ($frame instanceof OkPacket) {
+                $this->promise->resolve($this->sequenceId);
+            } elseif ($frame instanceof ErrPacket) {
+                $this->promise->reject($this->createAuthException($frame->errorCode, $frame->sqlState, $frame->errorMessage));
+            } elseif ($frame instanceof AuthSwitchRequest) {
+                $this->handleAuthPluginSwitch($frame);
+            } elseif ($frame instanceof AuthMoreData) {
+                $this->handleAuthMoreData($frame);
+            }
+        } catch (\Throwable $e) {
+            $this->promise->reject(new AuthenticationException('Failed to process authentication packet: ' . $e->getMessage(), (int)$e->getCode(), $e));
         }
     }
 
-    private function handleAuthSuccess(): void
-    {
-        $this->promise->resolve($this->sequenceId);
-    }
-
-    private function handleAuthError(PayloadReader $reader): void
-    {
-        $errorCode = (int)$reader->readFixedInteger(2);
-        $reader->readFixedString(1);
-        $sqlState = $reader->readFixedString(5);
-        $message = $reader->readRestOfPacketString();
-        $exception = $this->createAuthException($errorCode, $sqlState, $message);
-        $this->promise->reject($exception);
-    }
-
-    private function handleAuthPluginSwitch(PayloadReader $reader): void
+    private function handleAuthPluginSwitch(AuthSwitchRequest $frame): void
     {
         try {
-            $this->authPlugin = $reader->readNullTerminatedString();
-            $this->scramble = $reader->readRestOfPacketString();
+            $this->authPlugin = $frame->pluginName;
+            $this->scramble = $frame->authData;
             $response = $this->generateAuthResponse($this->authPlugin, $this->scramble);
             $this->writePacket($response);
         } catch (\Throwable $e) {
@@ -282,24 +253,19 @@ final class HandshakeHandler
         }
     }
 
-    private function handleAuthMoreData(PayloadReader $reader, int $length): void
+    private function handleAuthMoreData(AuthMoreData $frame): void
     {
         try {
-            if ($length <= 2) {
-                $this->handleAuthSubStatus($reader);
+            if ($frame->isFullAuthRequired()) {
+                $this->sendFullAuthCredentials();
+            } elseif ($frame->isFastAuthSuccess()) {
+                // Do nothing. Wait for the upcoming OK packet from the server.
+                return;
             } else {
-                $this->handleRsaPublicKey($reader);
+                $this->handleRsaPublicKey($frame->data);
             }
         } catch (\Throwable $e) {
             $this->promise->reject(new AuthenticationException('Failed to handle authentication continuation: ' . $e->getMessage(), (int)$e->getCode(), $e));
-        }
-    }
-
-    private function handleAuthSubStatus(PayloadReader $reader): void
-    {
-        $subStatus = $reader->readFixedInteger(1);
-        if ($subStatus === AuthPacketType::FULL_AUTH_REQUIRED) {
-            $this->sendFullAuthCredentials();
         }
     }
 
@@ -312,10 +278,8 @@ final class HandshakeHandler
         }
     }
 
-    private function handleRsaPublicKey(PayloadReader $reader): void
+    private function handleRsaPublicKey(string $publicKey): void
     {
-        $publicKey = $reader->readRestOfPacketString();
-
         try {
             $encrypted = AuthScrambler::scrambleSha256Rsa($this->params->password, $this->scramble, $publicKey);
             $this->writePacket($encrypted);
@@ -326,9 +290,8 @@ final class HandshakeHandler
 
     private function writePacket(string $payload): void
     {
-        $len = \strlen($payload);
-        $header = substr(pack('V', $len), 0, 3) . \chr($this->sequenceId & 0xFF);
-        $this->socket->write($header . $payload);
+        $packet = $this->packetWriter->write($payload, $this->sequenceId);
+        $this->socket->write($packet);
         $this->sequenceId++;
     }
 

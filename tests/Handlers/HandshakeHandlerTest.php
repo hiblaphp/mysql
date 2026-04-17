@@ -116,11 +116,11 @@ describe('HandshakeHandler', function () {
 
         $promise = $handler->start($packetReader);
 
-        $okPacket = buildMySQLOkPacket();
-        $packetReader->append($okPacket);
-
         $payloadReader = Mockery::mock(PayloadReader::class);
         $payloadReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x00);
+        $payloadReader->shouldReceive('readLengthEncodedIntegerOrNull')->andReturn(0);
+        $payloadReader->shouldReceive('readFixedInteger')->with(2)->andReturn(0);
+        $payloadReader->shouldReceive('readRestOfPacketString')->andReturn('');
 
         $handler->processPacket($payloadReader, 7, 2);
 
@@ -187,7 +187,7 @@ describe('HandshakeHandler', function () {
         $handler->start($packetReader);
 
         $payloadReader = Mockery::mock(PayloadReader::class);
-        $payloadReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0xFE); // SWITCH
+        $payloadReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0xFE);
         $payloadReader->shouldReceive('readNullTerminatedString')->andReturn('mysql_native_password');
         $payloadReader->shouldReceive('readRestOfPacketString')->andReturn('scramble');
 
@@ -210,8 +210,8 @@ describe('HandshakeHandler', function () {
         $handler->start($packetReader);
 
         $payloadReader = Mockery::mock(PayloadReader::class);
-
-        $payloadReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x01, 0x03);
+        $payloadReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x01);
+        $payloadReader->shouldReceive('readRestOfPacketString')->andReturn("\x03");
 
         $handler->processPacket($payloadReader, 2, 2);
 
@@ -237,8 +237,8 @@ describe('HandshakeHandler', function () {
         Loop::run();
 
         $payloadReader = Mockery::mock(PayloadReader::class);
-
-        $payloadReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x01, 0x04);
+        $payloadReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x01);
+        $payloadReader->shouldReceive('readRestOfPacketString')->andReturn("\x04");
 
         $handler->processPacket($payloadReader, 2, 2);
 
