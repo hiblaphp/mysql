@@ -617,7 +617,7 @@ describe('PoolManager', function (): void {
             expect($pool->stats['pooled_connections'])->toBe(1);
 
             $sleepResult = sleep(1.1);
-            if ($sleepResult instanceof \Hibla\Promise\Interfaces\PromiseInterface) {
+            if ($sleepResult instanceof Hibla\Promise\Interfaces\PromiseInterface) {
                 await($sleepResult);
             }
 
@@ -634,7 +634,7 @@ describe('PoolManager', function (): void {
             $conn = await($pool->get());
 
             $sleepResult = sleep(1.1);
-            if ($sleepResult instanceof \Hibla\Promise\Interfaces\PromiseInterface) {
+            if ($sleepResult instanceof Hibla\Promise\Interfaces\PromiseInterface) {
                 await($sleepResult);
             }
 
@@ -653,7 +653,7 @@ describe('PoolManager', function (): void {
             $pool->release($conn);
 
             $sleepResult = sleep(1.1);
-            if ($sleepResult instanceof \Hibla\Promise\Interfaces\PromiseInterface) {
+            if ($sleepResult instanceof Hibla\Promise\Interfaces\PromiseInterface) {
                 await($sleepResult);
             }
 
@@ -678,7 +678,7 @@ describe('PoolManager', function (): void {
             expect($pool->stats['pooled_connections'])->toBe(1);
 
             unset($pool);
-            
+
             // Force GC just in case
             gc_collect_cycles();
 
@@ -698,7 +698,7 @@ describe('PoolManager', function (): void {
             expect($pool->stats['pooled_connections'])->toBe(3);
 
             unset($pool);
-            
+
             // Force GC just in case
             gc_collect_cycles();
 
@@ -721,7 +721,7 @@ describe('PoolManager', function (): void {
             expect($pool->stats['waiting_requests'])->toBe(1);
 
             unset($pool);
-            
+
             gc_collect_cycles();
 
             try {

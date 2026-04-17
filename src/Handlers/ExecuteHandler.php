@@ -61,6 +61,8 @@ final class ExecuteHandler
 
     private ?StreamStats $primaryStreamStats = null;
 
+    private bool $streamCompleted = false;
+
     /**
      * @var DynamicRowOrEofParser|null Parser that handles dynamic Text vs Binary row detection.
      */
@@ -112,6 +114,7 @@ final class ExecuteHandler
         $this->rowParser = null;
 
         $this->streamContext = $streamContext;
+        $this->streamCompleted = false;
         $this->streamedRowCount = 0;
         $this->streamStartTime = (float) hrtime(true);
 
@@ -187,7 +190,54 @@ final class ExecuteHandler
             if ($frame->hasMoreResults()) {
                 $this->prepareDrain($result, null);
 
+                if ($this->streamContext !== null && ! $this->streamCompleted) {
+                    $this->streamCompleted = true;
+                    $duration = ((float)hrtime(true) - $this->streamStartTime) / 1e9;
+                    $stats = new StreamStats(
+                        rowCount: $this->streamedRowCount,
+                        columnCount: 0,
+                        duration: $duration,
+                        warningCount: $frame->warnings,
+                        connectionId: $this->connection->getThreadId()
+                    );
+                    if ($this->primaryStreamStats === null) {
+                        $this->primaryStreamStats = $stats;
+                    }
+                    if ($this->streamContext->onComplete !== null) {
+                        try {
+                            ($this->streamContext->onComplete)($stats);
+                        } catch (\Throwable $e) {
+                        }
+                    }
+                }
+
                 return false;
+            }
+
+            if ($this->streamContext !== null) {
+                $duration = ((float)hrtime(true) - $this->streamStartTime) / 1e9;
+                $stats = new StreamStats(
+                    rowCount: $this->streamedRowCount,
+                    columnCount: \count($this->columnDefinitions),
+                    duration: $duration,
+                    warningCount: $frame->warnings,
+                    connectionId: $this->connection->getThreadId()
+                );
+                $finalStats = $this->primaryStreamStats ?? $stats;
+
+                if (! $this->streamCompleted) {
+                    $this->streamCompleted = true;
+                    if ($this->streamContext->onComplete !== null) {
+                        try {
+                            ($this->streamContext->onComplete)($finalStats);
+                        } catch (\Throwable $e) {
+                        }
+                    }
+                }
+
+                $this->currentPromise?->resolve($finalStats);
+
+                return true;
             }
 
             if ($this->headResult === null) {
@@ -342,6 +392,10 @@ final class ExecuteHandler
         }
 
         if ($this->streamContext !== null) {
+            if ($this->streamCompleted) {
+                return;
+            }
+
             try {
                 ($this->streamContext->onRow)($assocRow);
                 $this->streamedRowCount++;
@@ -371,6 +425,20 @@ final class ExecuteHandler
             );
             $currentResult = null;
             $currentStats = $stats;
+
+            if ($this->primaryStreamStats === null) {
+                $this->primaryStreamStats = $stats;
+            }
+
+            if (! $this->streamCompleted) {
+                $this->streamCompleted = true;
+                if ($this->streamContext->onComplete !== null) {
+                    try {
+                        ($this->streamContext->onComplete)($this->primaryStreamStats);
+                    } catch (\Throwable $e) {
+                    }
+                }
+            }
         } else {
             $result = new Result(
                 rows: $this->rows,
@@ -392,12 +460,6 @@ final class ExecuteHandler
 
         if ($this->streamContext !== null) {
             $finalStats = $this->primaryStreamStats ?? $currentStats;
-            if ($this->streamContext->onComplete !== null && $finalStats !== null) {
-                try {
-                    ($this->streamContext->onComplete)($finalStats);
-                } catch (\Throwable $e) {
-                }
-            }
             if ($finalStats !== null) {
                 $this->currentPromise?->resolve($finalStats);
             }

@@ -62,6 +62,8 @@ final class QueryHandler
 
     private ?StreamStats $primaryStreamStats = null;
 
+    private bool $streamCompleted = false;
+
     /**
      * @var Promise<Result|StreamStats>|null
      */
@@ -104,6 +106,7 @@ final class QueryHandler
         $this->headResult = null;
         $this->tailResult = null;
         $this->primaryStreamStats = null;
+        $this->streamCompleted = false;
 
         $packet = $this->commandBuilder->buildQuery($sql);
 
@@ -184,6 +187,53 @@ final class QueryHandler
 
             if ($frame->hasMoreResults()) {
                 $this->prepareDrain($result, null);
+
+                if ($this->streamContext !== null && ! $this->streamCompleted) {
+                    $this->streamCompleted = true;
+                    $duration = ((float)hrtime(true) - $this->streamStartTime) / 1e9;
+                    $stats = new StreamStats(
+                        rowCount: $this->streamedRowCount,
+                        columnCount: 0,
+                        duration: $duration,
+                        warningCount: $frame->warnings,
+                        connectionId: $this->connection->getThreadId()
+                    );
+                    if ($this->primaryStreamStats === null) {
+                        $this->primaryStreamStats = $stats;
+                    }
+                    if ($this->streamContext->onComplete !== null) {
+                        try {
+                            ($this->streamContext->onComplete)($stats);
+                        } catch (\Throwable $e) {
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            if ($this->streamContext !== null) {
+                $duration = ((float)hrtime(true) - $this->streamStartTime) / 1e9;
+                $stats = new StreamStats(
+                    rowCount: $this->streamedRowCount,
+                    columnCount: $this->columnCount,
+                    duration: $duration,
+                    warningCount: $frame->warnings,
+                    connectionId: $this->connection->getThreadId()
+                );
+                $finalStats = $this->primaryStreamStats ?? $stats;
+
+                if (! $this->streamCompleted) {
+                    $this->streamCompleted = true;
+                    if ($this->streamContext->onComplete !== null) {
+                        try {
+                            ($this->streamContext->onComplete)($finalStats);
+                        } catch (\Throwable $e) {
+                        }
+                    }
+                }
+
+                $this->currentPromise?->resolve($finalStats);
 
                 return;
             }
@@ -322,6 +372,20 @@ final class QueryHandler
             );
             $currentResult = null;
             $currentStats = $stats;
+
+            if ($this->primaryStreamStats === null) {
+                $this->primaryStreamStats = $stats;
+            }
+
+            if (! $this->streamCompleted) {
+                $this->streamCompleted = true;
+                if ($this->streamContext->onComplete !== null) {
+                    try {
+                        ($this->streamContext->onComplete)($this->primaryStreamStats);
+                    } catch (\Throwable $e) {
+                    }
+                }
+            }
         } else {
             $result = new Result(
                 rows: $this->rows,
@@ -342,12 +406,6 @@ final class QueryHandler
 
         if ($this->streamContext !== null) {
             $finalStats = $this->primaryStreamStats ?? $currentStats;
-            if ($this->streamContext->onComplete !== null && $finalStats !== null) {
-                try {
-                    ($this->streamContext->onComplete)($finalStats);
-                } catch (\Throwable $e) {
-                }
-            }
             if ($finalStats !== null) {
                 $this->currentPromise?->resolve($finalStats);
             }
@@ -408,7 +466,7 @@ final class QueryHandler
      */
     private function processStreamingRow(array $row): void
     {
-        if ($this->streamContext === null) {
+        if ($this->streamContext === null || $this->streamCompleted) {
             return;
         }
 

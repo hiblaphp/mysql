@@ -80,18 +80,21 @@ describe('MysqlClient', function (): void {
         });
 
         it('throws ConfigurationException for invalid maxConnections', function (): void {
-            expect(fn() => makeClient(maxConnections: 0))
-                ->toThrow(ConfigurationException::class);
+            expect(fn () => makeClient(maxConnections: 0))
+                ->toThrow(ConfigurationException::class)
+            ;
         });
 
         it('throws ConfigurationException for invalid idleTimeout', function (): void {
-            expect(fn() => makeClient(idleTimeout: 0))
-                ->toThrow(ConfigurationException::class);
+            expect(fn () => makeClient(idleTimeout: 0))
+                ->toThrow(ConfigurationException::class)
+            ;
         });
 
         it('throws ConfigurationException for invalid maxLifetime', function (): void {
-            expect(fn() => makeClient(maxLifetime: 0))
-                ->toThrow(ConfigurationException::class);
+            expect(fn () => makeClient(maxLifetime: 0))
+                ->toThrow(ConfigurationException::class)
+            ;
         });
 
         it('creates a client with statement cache disabled', function (): void {
@@ -603,8 +606,9 @@ describe('MysqlClient', function (): void {
             $client = makeClient();
             $client->close();
 
-            expect(fn() => await($client->query('SELECT 1')))
-                ->toThrow(NotInitializedException::class);
+            expect(fn () => await($client->query('SELECT 1')))
+                ->toThrow(NotInitializedException::class)
+            ;
         });
 
         it('is safe to call close() multiple times', function (): void {
@@ -825,8 +829,9 @@ describe('MysqlClient', function (): void {
             $client = makeClient();
             $client->close();
 
-            expect(fn() => $client->stats)
-                ->toThrow(NotInitializedException::class);
+            expect(fn () => $client->stats)
+                ->toThrow(NotInitializedException::class)
+            ;
         });
     });
 
@@ -930,14 +935,14 @@ describe('MysqlClient', function (): void {
             $maxWaiters = 3;
             $client = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
 
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
 
             for ($i = 0; $i < $maxWaiters; $i++) {
-                $client->query('SELECT 1')->catch(fn() => null);
+                $client->query('SELECT 1')->catch(fn () => null);
             }
 
-            expect(fn() => await($client->query("SELECT 'overflow'")))->toThrow(PoolException::class);
+            expect(fn () => await($client->query("SELECT 'overflow'")))->toThrow(PoolException::class);
 
             $client->close();
         });
@@ -946,8 +951,8 @@ describe('MysqlClient', function (): void {
             $maxWaiters = 5;
             $client = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
 
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
 
             for ($i = 0; $i < $maxWaiters; $i++) {
                 $client->query('SELECT 1');
@@ -962,8 +967,8 @@ describe('MysqlClient', function (): void {
             $maxWaiters = 5;
             $client = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
 
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
-            $client->query('DO SLEEP(2)')->catch(fn() => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
+            $client->query('DO SLEEP(2)')->catch(fn () => null);
 
             for ($i = 0; $i < $maxWaiters - 1; $i++) {
                 $client->query('SELECT 1');
@@ -999,7 +1004,7 @@ describe('MysqlClient', function (): void {
                 $queued[] = $client->query('SELECT ? AS val', [1]);
             }
 
-            expect(fn() => await($client->query("SELECT 'overflow'")))->toThrow(PoolException::class);
+            expect(fn () => await($client->query("SELECT 'overflow'")))->toThrow(PoolException::class);
 
             await($slow);
 
@@ -1066,7 +1071,7 @@ describe('MysqlClient', function (): void {
 
             $hog = $client->query('DO SLEEP(3)');
 
-            expect(fn() => await($client->query("SELECT 'victim'")))->toThrow(TimeoutException::class);
+            expect(fn () => await($client->query("SELECT 'victim'")))->toThrow(TimeoutException::class);
 
             await($hog);
             $client->close();
@@ -1189,8 +1194,9 @@ describe('MysqlClient', function (): void {
         it('rejects stacked queries when multi_statements is disabled by default', function (): void {
             $client = makeClient();
 
-            expect(fn() => await($client->query('SELECT 1; SELECT 2')))
-                ->toThrow(QueryException::class);
+            expect(fn () => await($client->query('SELECT 1; SELECT 2')))
+                ->toThrow(QueryException::class)
+            ;
 
             $client->close();
         });
@@ -1330,7 +1336,7 @@ describe('MysqlClient', function (): void {
 
         it('session variable persists across checkouts on the same connection', function (): void {
             $client = makeOnConnectClient(
-                onConnect: fn(ConnectionSetup $conn) => $conn->execute("SET SESSION time_zone = '+05:30'")
+                onConnect: fn (ConnectionSetup $conn) => $conn->execute("SET SESSION time_zone = '+05:30'")
             );
 
             $tz1 = await($client->fetchValue('SELECT @@session.time_zone'));
@@ -1420,13 +1426,14 @@ describe('MysqlClient', function (): void {
 
         it('rejects the caller and drops the connection when hook fails', function (): void {
             $client = makeOnConnectClient(
-                onConnect: fn(ConnectionSetup $conn) => $conn->execute(
+                onConnect: fn (ConnectionSetup $conn) => $conn->execute(
                     'SET SESSION invalid_var_that_does_not_exist = 1'
                 )
             );
 
-            expect(fn() => await($client->fetchValue('SELECT 1')))
-                ->toThrow(QueryException::class);
+            expect(fn () => await($client->fetchValue('SELECT 1')))
+                ->toThrow(QueryException::class)
+            ;
 
             expect($client->stats['active_connections'])->toBe(0);
 

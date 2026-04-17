@@ -283,6 +283,7 @@ class PoolManager
                     $count++;
                 }
             }
+
             return $count;
         }
     }
@@ -527,7 +528,8 @@ class PoolManager
 
             $pendingShutdown->finally(function () use ($timerId): void {
                 Loop::cancelTimer($timerId);
-            })->catch(static function (): void {});
+            })->catch(static function (): void {
+            });
         }
 
         if ($this->shutdownPromise !== null) {
@@ -644,7 +646,8 @@ class PoolManager
                         $stats['unhealthy']++;
                         $this->removeConnection($connection);
                     }
-                );
+                )
+            ;
         }
 
         Promise::all($checkPromises)
@@ -745,8 +748,9 @@ class PoolManager
 
         $setup = new ConnectionSetup($connection);
 
-        return async(fn() => ($this->onConnect)($setup))
-            ->then(fn() => $connection);
+        return async(fn () => ($this->onConnect)($setup))
+            ->then(fn () => $connection)
+        ;
     }
 
     /**
@@ -866,7 +870,7 @@ class PoolManager
                 // initial handshake. The hook must restore it for the same reason
                 // it ran at connect time.
                 $this->runOnConnectHook($connection)->then(
-                    fn() => $this->releaseClean($connection),
+                    fn () => $this->releaseClean($connection),
                     function (Throwable $e) use ($connection): void {
                         // Hook failed after reset — unknown session state, drop it.
                         $this->removeConnection($connection);
@@ -1005,6 +1009,7 @@ class PoolManager
                         $this->activeConnections--;
                         $promise->reject(new PoolException('Pool is being closed'));
                         $this->checkShutdownComplete();
+
                         return;
                     }
 
@@ -1018,13 +1023,15 @@ class PoolManager
                             if ($this->isClosing) {
                                 $this->removeConnection($connection);
                                 $promise->reject(new PoolException('Pool is being closed'));
+
                                 return;
                             }
 
-                            // If the caller cancelled the query while connecting, release 
+                            // If the caller cancelled the query while connecting, release
                             // cleanly so it can be destroyed or given to the next waiter.
                             if ($promise->isCancelled()) {
                                 $this->releaseClean($connection);
+
                                 return;
                             }
 
@@ -1069,6 +1076,7 @@ class PoolManager
                         $this->activeConnections--;
                         $waiter->reject(new PoolException('Pool is being closed'));
                         $this->checkShutdownComplete();
+
                         return;
                     }
 
@@ -1081,12 +1089,14 @@ class PoolManager
                             if ($this->isClosing) {
                                 $this->removeConnection($connection);
                                 $waiter->reject(new PoolException('Pool is being closed'));
+
                                 return;
                             }
 
                             if ($waiter->isCancelled()) {
                                 // Waiter gave up while hook was running, park cleanly.
                                 $this->releaseClean($connection);
+
                                 return;
                             }
 

@@ -53,7 +53,8 @@ class Transaction implements TransactionInterface
         private readonly Connection $connection,
         private readonly PoolManager $pool,
         private readonly ?ArrayCache $statementCache = null
-    ) {}
+    ) {
+    }
 
     /**
      * {@inheritdoc}
@@ -85,10 +86,12 @@ class Transaction implements TransactionInterface
                         if (! $isCached) {
                             $stmt->close();
                         }
-                    });
+                    })
+                ;
 
                 return $innerPromise;
-            });
+            })
+        ;
 
         $this->bindInnerCancellation($promise, $innerPromise);
 
@@ -133,10 +136,12 @@ class Transaction implements TransactionInterface
                         }
 
                         return $stream;
-                    });
+                    })
+                ;
 
                 return $innerPromise;
-            });
+            })
+        ;
 
         $this->bindInnerCancellation($promise, $innerPromise);
 
@@ -172,7 +177,7 @@ class Transaction implements TransactionInterface
     {
         return $this->withCancellation(
             $this->query($sql, $params)
-                ->then(fn(ResultInterface $result) => $result->affectedRows)
+                ->then(fn (ResultInterface $result) => $result->affectedRows)
         );
     }
 
@@ -183,7 +188,7 @@ class Transaction implements TransactionInterface
     {
         return $this->withCancellation(
             $this->query($sql, $params)
-                ->then(fn(ResultInterface $result) => $result->lastInsertId)
+                ->then(fn (ResultInterface $result) => $result->lastInsertId)
         );
     }
 
@@ -194,7 +199,7 @@ class Transaction implements TransactionInterface
     {
         return $this->withCancellation(
             $this->query($sql, $params)
-                ->then(fn(ResultInterface $result) => $result->fetchOne())
+                ->then(fn (ResultInterface $result) => $result->fetchOne())
         );
     }
 
@@ -280,7 +285,8 @@ class Transaction implements TransactionInterface
                     );
                 }
             )
-            ->finally($this->releaseConnection(...));
+            ->finally($this->releaseConnection(...))
+        ;
     }
 
     /**
@@ -313,7 +319,8 @@ class Transaction implements TransactionInterface
                     );
                 }
             )
-            ->finally($this->releaseConnection(...));
+            ->finally($this->releaseConnection(...))
+        ;
     }
 
     /**
@@ -431,7 +438,7 @@ class Transaction implements TransactionInterface
     private function getCachedStatement(string $sql): PromiseInterface
     {
         if ($this->statementCache === null) {
-            return $this->connection->prepare($sql)->then(fn($stmt) => [$stmt, false]);
+            return $this->connection->prepare($sql)->then(fn ($stmt) => [$stmt, false]);
         }
 
         return $this->statementCache->get($sql)->then(function (mixed $stmt) use ($sql) {

@@ -9,7 +9,6 @@ use Hibla\Promise\Promise;
 use Hibla\Socket\Interfaces\ConnectionInterface as SocketConnection;
 use Rcalicdan\MySQLBinaryProtocol\Factory\DefaultPacketReaderFactory;
 use Rcalicdan\MySQLBinaryProtocol\Packet\PayloadReader;
-use Tests\Fixtures\SslCapableConnection;
 
 use function Hibla\await;
 
@@ -48,15 +47,16 @@ describe('HandshakeHandler', function () {
         $promise = $handler->start($packetReader);
 
         $exception = null;
-        
+
         try {
             await($promise);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $exception = $e;
         }
 
         expect($exception)->not->toBeNull()
-            ->and($exception->getMessage())->toContain('server does not support SSL');
+            ->and($exception->getMessage())->toContain('server does not support SSL')
+        ;
     });
 
     it('writes SSL request packet when SSL is enabled', function () {
