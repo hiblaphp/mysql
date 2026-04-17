@@ -120,23 +120,24 @@ class RowStream implements MysqlRowStream
         }
     }
 
-    public function __construct(int $bufferSize = self::DEFAULT_BUFFER_SIZE)
-    {
-        if ($bufferSize < 1) {
-            throw new \InvalidArgumentException('Buffer size must be at least 1');
-        }
+     public function __construct(int $bufferSize = self::DEFAULT_BUFFER_SIZE)
+     {
+         if ($bufferSize < 1) {
+             throw new \InvalidArgumentException('Buffer size must be at least 1');
+         }
 
-        $this->maxBufferSize = $bufferSize;
-        $this->resumeThreshold = (int) ($bufferSize / 2);
+         $this->maxBufferSize = $bufferSize;
+         // Ensure the resume threshold is always at least 1 to prevent infinite pauses
+         $this->resumeThreshold = max(1, (int) ($bufferSize / 2));
 
-        /** @var SplQueue<array<string, mixed>> $buffer */
-        $buffer = new SplQueue();
-        $this->buffer = $buffer;
+         /** @var SplQueue<array<string, mixed>> $buffer */
+         $buffer = new SplQueue();
+         $this->buffer = $buffer;
 
-        /** @var Promise<void> $lifecyclePromise */
-        $lifecyclePromise = new Promise();
-        $this->internalLifecyclePromise = $lifecyclePromise;
-    }
+         /** @var Promise<void> $lifecyclePromise */
+         $lifecyclePromise = new Promise();
+         $this->internalLifecyclePromise = $lifecyclePromise;
+     }
 
     /**
      * Iterates over the rows.

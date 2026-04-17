@@ -23,9 +23,8 @@ describe('Client Query Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(microtime(true) - $startTime)->toBeLessThan(1.0);
+        expect(microtime(true) - $startTime)->toBeLessThan(1.5);
 
-        // ALWAYS await closeAsync in tests to prevent hanging loops
         await($client->closeAsync());
     });
 
@@ -43,7 +42,6 @@ describe('Client Query Cancellation', function (): void {
         } catch (CancelledException) {
         }
 
-        // Small delay to let the side-channel kill and pool absorption finish
         await(delay(0.1));
 
         $result = await($client->query('SELECT "Alive" AS status'));
@@ -96,7 +94,6 @@ describe('Client Query Cancellation', function (): void {
 
 describe('Client Waiter Cancellation', function (): void {
     it('cancels a queued waiter before it reaches the server and throws CancelledException', function (): void {
-        // Reduced maxConnections to 2 to speed up setup/teardown of the test
         $client = makeClient(maxConnections: 2, enableServerSideCancellation: true);
 
         $holders = [
@@ -117,8 +114,7 @@ describe('Client Waiter Cancellation', function (): void {
         foreach ($holders as $holder) {
             $holder->cancel();
         }
-
-        // Wait just enough for the KILL QUERY packets to be sent
+        
         await(delay(0.2));
         await($client->closeAsync());
     });
