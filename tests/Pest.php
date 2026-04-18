@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Hibla\Mysql\Internals\Connection;
+use Hibla\Mysql\Internals\Result;
 use Hibla\Mysql\Manager\PoolManager;
 use Hibla\Mysql\MysqlClient;
 use Hibla\Mysql\ValueObjects\MysqlConfig;
@@ -20,6 +21,24 @@ uses()
     })
     ->in(__DIR__)
 ;
+
+function makeTxMocks(): array
+{
+    $conn = Mockery::mock(Connection::class);
+    $pool = Mockery::mock(PoolManager::class);
+
+    $conn->shouldReceive('isClosed')->andReturn(false)->byDefault();
+
+    $conn->shouldReceive('query')
+        ->with('ROLLBACK')
+        ->andReturn(Promise::resolved(new Result()))
+        ->byDefault();
+
+    $pool->shouldReceive('release')->byDefault();
+
+    return [$conn, $pool];
+}
+
 
 function createMockColumn(string $name): ColumnDefinition
 {
