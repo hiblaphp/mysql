@@ -181,7 +181,8 @@ describe('Pool Scaling and Capacity', function (): void {
     it('tracks connections in draining state when query is cancelled', function (): void {
         $client = makeClient(maxConnections: 1, enableServerSideCancellation: true);
 
-        // Increased to 5s so it definitely doesn't complete naturally if the kill takes a second
+        await($client->query('SELECT 1'));
+        
         $promise = $client->query('SELECT SLEEP(5)');
         await(delay(0.1));
         $promise->cancel();
@@ -193,7 +194,6 @@ describe('Pool Scaling and Capacity', function (): void {
 
         expect($client->stats['draining_connections'])->toBe(1);
 
-        // Poll for up to 4s for the KILL connection to finish and DO SLEEP(0) to resolve
         $attempts = 0;
         while ($client->stats['draining_connections'] > 0 && $attempts < 40) {
             await(delay(0.1));
@@ -298,9 +298,8 @@ describe('Pool Scaling and Capacity', function (): void {
         $client->query('SELECT SLEEP(1)');
         $client->query('SELECT 1');
 
-        expect(fn () => await($client->query('SELECT 1')))
-            ->toThrow(PoolException::class)
-        ;
+        expect(fn() => await($client->query('SELECT 1')))
+            ->toThrow(PoolException::class);
 
         $client->close();
     });
@@ -321,7 +320,7 @@ describe('Pool Scaling and Capacity', function (): void {
         await($shutdownPromise);
 
         // Once graceful shutdown completes, the pool is destroyed and nulled entirely
-        expect(fn () => $client->stats)->toThrow(Hibla\Mysql\Exceptions\NotInitializedException::class);
+        expect(fn() => $client->stats)->toThrow(Hibla\Mysql\Exceptions\NotInitializedException::class);
     });
 
     it('scales up and down during high concurrent SP multiplexing', function (): void {

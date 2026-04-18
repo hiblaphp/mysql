@@ -140,7 +140,7 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
     public function close(): PromiseInterface
     {
         if ($this->isClosed) {
-            Promise::resolved();
+            return Promise::resolved();
         }
 
         $this->isClosed = true;

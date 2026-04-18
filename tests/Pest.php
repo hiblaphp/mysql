@@ -7,18 +7,37 @@ use Hibla\Mysql\Manager\PoolManager;
 use Hibla\Mysql\MysqlClient;
 use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Promise\Promise;
+use Rcalicdan\MySQLBinaryProtocol\Frame\Result\ColumnDefinition;
 
 use function Hibla\await;
 
 uses()
     ->beforeAll(function () {
-        Promise::setRejectionHandler(fn () => null);
+        Promise::setRejectionHandler(fn() => null);
     })
     ->afterEach(function () {
         Mockery::close();
     })
     ->in(__DIR__)
 ;
+
+function createMockColumn(string $name): ColumnDefinition
+{
+    return new ColumnDefinition(
+        catalog: 'def',
+        schema: 'test',
+        table: 'users',
+        orgTable: 'users',
+        name: $name,
+        orgName: $name,
+        charset: 33,
+        columnLength: 255,
+        type: 253, 
+        flags: 0,
+        decimals: 0
+    );
+}
+
 
 function createMysqlConfig(bool $ssl = false): MysqlConfig
 {
