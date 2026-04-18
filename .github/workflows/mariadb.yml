@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   mariadb-ci:
-    name: PHP ${{ matrix.php }} - MariaDB 
+    name: PHP ${{ matrix.php }} - MariaDB LTS
     runs-on: ubuntu-latest
     
     strategy:

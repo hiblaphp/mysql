@@ -50,7 +50,7 @@
             "phpstan/extension-installer": true
         }
     },
-    "minimum-stability": "dev",
+    "minimum-stability": "alpha",
     "prefer-stable": true,
     "scripts": {
         "test": "vendor/bin/pest",
@@ -59,13 +59,20 @@
             "@putenv MYSQL_SSL_PORT=3307",
             "vendor/bin/pest --compact"
         ],
+        "test:mysql90": [
+            "@putenv MYSQL_PORT=3313",
+            "@putenv MYSQL_SSL_PORT=3314",
+            "vendor/bin/pest --compact"
+        ],
         "test:mariadb": [
             "@putenv MYSQL_PORT=3311",
             "@putenv MYSQL_SSL_PORT=3308",
             "vendor/bin/pest --compact"
         ],
         "test:all": [
+            "@test:mysql57",
             "@test:mysql",
+            "@test:mysql90",
             "@test:mariadb"
         ],
         "format": "vendor/bin/pint",
