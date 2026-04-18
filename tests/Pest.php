@@ -8,6 +8,8 @@ use Hibla\Mysql\Manager\PoolManager;
 use Hibla\Mysql\MysqlClient;
 use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Promise\Promise;
+use Rcalicdan\MySQLBinaryProtocol\Constants\CharsetIdentifiers;
+use Rcalicdan\MySQLBinaryProtocol\Constants\MysqlType;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Result\ColumnDefinition;
 
 use function Hibla\await;
@@ -21,6 +23,26 @@ uses()
     })
     ->in(__DIR__)
 ;
+
+/**
+ * Helper to create a raw ColumnDefinition DTO via its constructor.
+ */
+function createRawCol(array $overrides = []): ColumnDefinition
+{
+    return new ColumnDefinition(
+        catalog: $overrides['catalog'] ?? 'def',
+        schema: $overrides['schema'] ?? 'mydb',
+        table: $overrides['table'] ?? 'users',
+        orgTable: $overrides['orgTable'] ?? 'users',
+        name: $overrides['name'] ?? 'id',
+        orgName: $overrides['orgName'] ?? 'id',
+        charset: $overrides['charset'] ?? CharsetIdentifiers::UTF8MB4,
+        columnLength: $overrides['columnLength'] ?? 11,
+        type: $overrides['type'] ?? MysqlType::LONG,
+        flags: $overrides['flags'] ?? 0,
+        decimals: $overrides['decimals'] ?? 0
+    );
+}
 
 function makeTxMocks(): array
 {
