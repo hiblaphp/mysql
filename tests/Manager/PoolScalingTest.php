@@ -182,7 +182,7 @@ describe('Pool Scaling and Capacity', function (): void {
         $client = makeClient(maxConnections: 1, enableServerSideCancellation: true);
 
         await($client->query('SELECT 1'));
-        
+
         $promise = $client->query('SELECT SLEEP(5)');
         await(delay(0.1));
         $promise->cancel();
@@ -391,9 +391,16 @@ describe('Pool Scaling and Capacity', function (): void {
     it('recovers from "DO SLEEP(0)" error during drain', function (): void {
         $client = makeClient(maxConnections: 1, enableServerSideCancellation: true);
 
+        await($client->query('SELECT 1'));
+
         $p = $client->query('SELECT SLEEP(1)');
         await(delay(0.1));
         $p->cancel();
+
+        try {
+            await($p);
+        } catch (\Throwable $e) {
+        }
 
         expect($client->stats['draining_connections'])->toBe(1);
 
