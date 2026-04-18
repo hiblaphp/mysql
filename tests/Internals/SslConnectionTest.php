@@ -166,11 +166,22 @@ describe('Real SSL/TLS Connection', function (): void {
 
         $conn = await(Connection::create($config));
 
+        $serverLimit = await($conn->query("SHOW VARIABLES LIKE 'max_allowed_packet'"))->fetchOne()['Value'];
+        
+        $targetSize = 20 * 1024 * 1024;
+        $payloadSize = 17 * 1024 * 1024;
+
+        if ((int) $serverLimit < $targetSize) {
+            $conn->close();
+            test()->markTestSkipped(
+                'Server max_allowed_packet (' . number_format((int) $serverLimit / 1024 / 1024, 2) . 'MB) ' .
+                'is too small for this test. Increase it to at least 20MB.'
+            );
+        }
+
         await($conn->query('CREATE TEMPORARY TABLE IF NOT EXISTS test_large_packet (data LONGBLOB)'));
 
-        $size = 17 * 1024 * 1024;
-
-        $largeString = str_repeat('A', $size);
+        $largeString = str_repeat('A', $payloadSize);
 
         $stmt = await($conn->prepare('INSERT INTO test_large_packet (data) VALUES (?)'));
         await($stmt->execute([$largeString]));
@@ -178,7 +189,7 @@ describe('Real SSL/TLS Connection', function (): void {
         $result = await($conn->query('SELECT data FROM test_large_packet'));
         $row = $result->fetchOne();
 
-        expect(strlen($row['data']))->toBe($size)
+        expect(strlen($row['data']))->toBe($payloadSize)
             ->and(md5($row['data']))->toBe(md5($largeString))
         ;
 

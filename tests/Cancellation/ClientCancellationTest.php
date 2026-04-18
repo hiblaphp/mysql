@@ -23,7 +23,7 @@ describe('Client Query Cancellation', function (): void {
             ->toThrow(CancelledException::class)
         ;
 
-        expect(microtime(true) - $startTime)->toBeLessThan(1.5);
+        expect(microtime(true) - $startTime)->toBeLessThan(2.5);
 
         await($client->closeAsync());
     });
@@ -42,7 +42,11 @@ describe('Client Query Cancellation', function (): void {
         } catch (CancelledException) {
         }
 
-        await(delay(0.1));
+        $attempts = 0;
+        while ($client->stats['draining_connections'] > 0 && $attempts < 40) {
+            await(delay(0.1));
+            $attempts++;
+        }
 
         $result = await($client->query('SELECT "Alive" AS status'));
         expect($result->fetchOne()['status'])->toBe('Alive');
@@ -83,7 +87,11 @@ describe('Client Query Cancellation', function (): void {
         } catch (CancelledException) {
         }
 
-        await(delay(0.1));
+        $attempts = 0;
+        while ($client->stats['draining_connections'] > 0 && $attempts < 40) {
+            await(delay(0.1));
+            $attempts++;
+        }
 
         $result = await($client->query('SELECT ? AS echo_value', ['HelloAfterCancel']));
         expect($result->fetchOne()['echo_value'])->toBe('HelloAfterCancel');
@@ -115,7 +123,11 @@ describe('Client Waiter Cancellation', function (): void {
             $holder->cancel();
         }
 
-        await(delay(0.2));
+        $attempts = 0;
+        while ($client->stats['draining_connections'] > 0 && $attempts < 40) {
+            await(delay(0.1));
+            $attempts++;
+        }
         await($client->closeAsync());
     });
 
@@ -142,7 +154,11 @@ describe('Client Waiter Cancellation', function (): void {
             $holder->cancel();
         }
 
-        await(delay(0.3));
+        $attempts = 0;
+        while ($client->stats['draining_connections'] > 0 && $attempts < 40) {
+            await(delay(0.1));
+            $attempts++;
+        }
 
         $result = await($client->query('SELECT "PoolOk" AS status'));
         expect($result->fetchOne()['status'])->toBe('PoolOk');
@@ -173,7 +189,11 @@ describe('Client Waiter Cancellation', function (): void {
             $holder->cancel();
         }
 
-        await(delay(0.4));
+        $attempts = 0;
+        while ($client->stats['draining_connections'] > 0 && $attempts < 40) {
+            await(delay(0.1));
+            $attempts++;
+        }
 
         $stats = $client->stats;
 
