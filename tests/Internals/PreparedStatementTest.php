@@ -947,13 +947,15 @@ describe('PreparedStatement', function (): void {
         it('handles JSON object', function (): void {
             $conn = makeConnection();
             $json = '{"name":"John","age":30}';
-                        try {
+
+            try {
                 $stmt = await($conn->prepare('SELECT CAST(? AS JSON) as json_val'));
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 if ($e->getCode() === 1064) {
                     $conn->close();
                     test()->markTestSkipped('MariaDB does not support CAST(... AS JSON)');
                 }
+
                 throw $e;
             }
             $result = await($stmt->execute([$json]));
@@ -971,13 +973,15 @@ describe('PreparedStatement', function (): void {
         it('handles JSON array', function (): void {
             $conn = makeConnection();
             $json = '[1,2,3,4,5]';
-                        try {
+
+            try {
                 $stmt = await($conn->prepare('SELECT CAST(? AS JSON) as json_val'));
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 if ($e->getCode() === 1064) {
                     $conn->close();
                     test()->markTestSkipped('MariaDB does not support CAST(... AS JSON)');
                 }
+
                 throw $e;
             }
             $result = await($stmt->execute([$json]));
@@ -993,13 +997,15 @@ describe('PreparedStatement', function (): void {
         it('handles nested JSON', function (): void {
             $conn = makeConnection();
             $json = '{"user":{"name":"Alice","roles":["admin","user"]}}';
-                        try {
+
+            try {
                 $stmt = await($conn->prepare('SELECT CAST(? AS JSON) as json_val'));
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 if ($e->getCode() === 1064) {
                     $conn->close();
                     test()->markTestSkipped('MariaDB does not support CAST(... AS JSON)');
                 }
+
                 throw $e;
             }
             $result = await($stmt->execute([$json]));

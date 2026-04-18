@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   mysql-ci:
-    name: PHP ${{ matrix.php }} - MySQL 8.0
+    name: PHP ${{ matrix.php }} - MySQL 8+
     runs-on: ubuntu-latest
     
     strategy:
@@ -37,7 +37,7 @@ jobs:
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Start MySQL Services
-        run: docker-compose up -d mysql mysql_ssl
+        run: docker compose up -d mysql mysql_ssl 
 
       - name: Wait for MySQL Health
         run: |
@@ -57,4 +57,4 @@ jobs:
 
       - name: Shutdown Services
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v '

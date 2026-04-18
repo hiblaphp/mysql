@@ -43,6 +43,7 @@ describe('MysqlClient', function (): void {
 
         it('creates a client with a MysqlConfig instance', function (): void {
             $client = new MysqlClient(testMysqlConfig());
+
             try {
                 expect($client->stats['statement_cache_enabled'])->toBeTrue();
             } finally {
@@ -52,12 +53,13 @@ describe('MysqlClient', function (): void {
 
         it('creates a client with an array config', function (): void {
             $client = new MysqlClient([
-                'host'     => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
-                'port'     => (int) ($_ENV['MYSQL_PORT'] ?? 3306),
+                'host' => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
+                'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3306),
                 'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
                 'username' => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
                 'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
             ]);
+
             try {
                 expect($client->stats['max_size'])->toBe(10);
             } finally {
@@ -66,8 +68,8 @@ describe('MysqlClient', function (): void {
         });
 
         it('creates a client with a URI string config', function (): void {
-            $host     = $_ENV['MYSQL_HOST'] ?? '127.0.0.1';
-            $port     = $_ENV['MYSQL_PORT'] ?? '3306';
+            $host = $_ENV['MYSQL_HOST'] ?? '127.0.0.1';
+            $port = $_ENV['MYSQL_PORT'] ?? '3306';
             $database = $_ENV['MYSQL_DATABASE'] ?? 'test';
             $username = $_ENV['MYSQL_USERNAME'] ?? 'test_user';
             $password = $_ENV['MYSQL_PASSWORD'] ?? 'test_password';
@@ -75,6 +77,7 @@ describe('MysqlClient', function (): void {
             $client = new MysqlClient(
                 "mysql://{$username}:{$password}@{$host}:{$port}/{$database}"
             );
+
             try {
                 expect($client->stats['max_size'])->toBe(10);
             } finally {
@@ -102,6 +105,7 @@ describe('MysqlClient', function (): void {
 
         it('creates a client with statement cache disabled', function (): void {
             $client = makeClient(enableStatementCache: false);
+
             try {
                 expect($client->stats['statement_cache_enabled'])->toBeFalse();
             } finally {
@@ -114,6 +118,7 @@ describe('MysqlClient', function (): void {
 
         it('returns correct default stats before any query', function (): void {
             $client = makeClient(maxConnections: 3, statementCacheSize: 128);
+
             try {
                 $stats = $client->stats;
 
@@ -131,6 +136,7 @@ describe('MysqlClient', function (): void {
 
         it('reflects statement cache disabled in stats', function (): void {
             $client = makeClient(enableStatementCache: false);
+
             try {
                 expect($client->stats['statement_cache_enabled'])->toBeFalse();
             } finally {
@@ -143,6 +149,7 @@ describe('MysqlClient', function (): void {
 
         it('returns healthy stats when pool has idle connections', function (): void {
             $client = makeClient();
+
             try {
                 await($client->query('SELECT 1'));
 
@@ -158,6 +165,7 @@ describe('MysqlClient', function (): void {
 
         it('returns zero stats when no connections have been made', function (): void {
             $client = makeClient();
+
             try {
                 $stats = await($client->healthCheck());
 
@@ -175,6 +183,7 @@ describe('MysqlClient', function (): void {
 
         it('executes a plain SELECT without params (text protocol)', function (): void {
             $client = makeClient();
+
             try {
                 $result = await($client->query('SELECT 1 AS val'));
                 expect($result->fetchOne()['val'])->toBe('1');
@@ -185,6 +194,7 @@ describe('MysqlClient', function (): void {
 
         it('executes a SELECT with params (binary protocol)', function (): void {
             $client = makeClient();
+
             try {
                 $result = await($client->query('SELECT ? AS val', [42]));
                 expect($result->fetchOne()['val'])->toBe(42);
@@ -195,6 +205,7 @@ describe('MysqlClient', function (): void {
 
         it('executes a SELECT with params and statement cache disabled', function (): void {
             $client = makeClient(enableStatementCache: false);
+
             try {
                 $result = await($client->query('SELECT ? AS val', [99]));
                 expect($result->fetchOne()['val'])->toBe(99);
@@ -205,6 +216,7 @@ describe('MysqlClient', function (): void {
 
         it('releases connection back to pool after query', function (): void {
             $client = makeClient(maxConnections: 1);
+
             try {
                 await($client->query('SELECT 1'));
                 await($client->query('SELECT 2'));
@@ -217,6 +229,7 @@ describe('MysqlClient', function (): void {
 
         it('releases connection back to pool after failed query', function (): void {
             $client = makeClient(maxConnections: 1);
+
             try {
                 try {
                     await($client->query('SELECT * FROM non_existent_table_xyz'));
@@ -233,6 +246,7 @@ describe('MysqlClient', function (): void {
 
         it('executes multiple sequential queries correctly', function (): void {
             $client = makeClient();
+
             try {
                 $result1 = await($client->query('SELECT 1 AS val'));
                 $result2 = await($client->query('SELECT 2 AS val'));
@@ -252,6 +266,7 @@ describe('MysqlClient', function (): void {
 
         it('returns affected rows count after INSERT', function (): void {
             $client = makeClient();
+
             try {
                 $affectedRows = await($client->execute(
                     "INSERT INTO mysql_client_test (name) VALUES ('execute_test')"
@@ -269,6 +284,7 @@ describe('MysqlClient', function (): void {
 
         it('returns zero affected rows when UPDATE matches no rows', function (): void {
             $client = makeClient();
+
             try {
                 $affectedRows = await($client->execute(
                     "UPDATE mysql_client_test SET name = 'x' WHERE id = -9999"
@@ -282,6 +298,7 @@ describe('MysqlClient', function (): void {
 
         it('returns affected rows with params', function (): void {
             $client = makeClient();
+
             try {
                 $affectedRows = await($client->execute(
                     'INSERT INTO mysql_client_test (name) VALUES (?)',
@@ -304,6 +321,7 @@ describe('MysqlClient', function (): void {
 
         it('returns the last insert id after INSERT', function (): void {
             $client = makeClient();
+
             try {
                 $insertId = await($client->executeGetId(
                     "INSERT INTO mysql_client_test (name) VALUES ('id_test')"
@@ -322,6 +340,7 @@ describe('MysqlClient', function (): void {
 
         it('returns the last insert id with params', function (): void {
             $client = makeClient();
+
             try {
                 $insertId = await($client->executeGetId(
                     'INSERT INTO mysql_client_test (name) VALUES (?)',
@@ -344,6 +363,7 @@ describe('MysqlClient', function (): void {
 
         it('returns the first row of a result set', function (): void {
             $client = makeClient();
+
             try {
                 $row = await($client->fetchOne('SELECT 1 AS val, 2 AS other'));
 
@@ -357,6 +377,7 @@ describe('MysqlClient', function (): void {
 
         it('returns null when no rows match', function (): void {
             $client = makeClient();
+
             try {
                 $row = await($client->fetchOne('SELECT 1 WHERE 1 = 0'));
                 expect($row)->toBeNull();
@@ -367,6 +388,7 @@ describe('MysqlClient', function (): void {
 
         it('returns only the first row when multiple rows exist', function (): void {
             $client = makeClient();
+
             try {
                 $row = await($client->fetchOne(
                     'SELECT 1 AS val UNION SELECT 2 AS val UNION SELECT 3 AS val'
@@ -380,6 +402,7 @@ describe('MysqlClient', function (): void {
 
         it('returns first row with params', function (): void {
             $client = makeClient();
+
             try {
                 $row = await($client->fetchOne('SELECT ? AS val', [123]));
                 expect($row['val'])->toBe(123);
@@ -393,6 +416,7 @@ describe('MysqlClient', function (): void {
 
         it('returns the value of a named column', function (): void {
             $client = makeClient();
+
             try {
                 $value = await($client->fetchValue('SELECT 42 AS answer', 'answer'));
                 expect($value)->toBe('42');
@@ -403,6 +427,7 @@ describe('MysqlClient', function (): void {
 
         it('returns null for a numeric index because fetchOne returns associative arrays only', function (): void {
             $client = makeClient();
+
             try {
                 $value = await($client->fetchValue('SELECT 42 AS answer', 0));
                 expect($value)->toBeNull();
@@ -413,6 +438,7 @@ describe('MysqlClient', function (): void {
 
         it('returns null when no rows match', function (): void {
             $client = makeClient();
+
             try {
                 $value = await($client->fetchValue('SELECT 1 WHERE 1 = 0', 0));
                 expect($value)->toBeNull();
@@ -423,6 +449,7 @@ describe('MysqlClient', function (): void {
 
         it('returns null when column key does not exist', function (): void {
             $client = makeClient();
+
             try {
                 $value = await($client->fetchValue('SELECT 1 AS val', 'nonexistent'));
                 expect($value)->toBeNull();
@@ -433,6 +460,7 @@ describe('MysqlClient', function (): void {
 
         it('returns a value with params', function (): void {
             $client = makeClient();
+
             try {
                 $value = await($client->fetchValue('SELECT ? AS val', 'val', [99]));
                 expect($value)->toBe(99);
@@ -446,6 +474,7 @@ describe('MysqlClient', function (): void {
 
         it('streams rows without params using text protocol', function (): void {
             $client = makeClient();
+
             try {
                 $stream = await($client->stream('SELECT 1 AS val UNION SELECT 2 UNION SELECT 3'));
 
@@ -464,6 +493,7 @@ describe('MysqlClient', function (): void {
 
         it('streams rows with params using binary protocol', function (): void {
             $client = makeClient();
+
             try {
                 $stream = await($client->stream(
                     'SELECT name FROM mysql_client_test WHERE id > ? LIMIT 1',
@@ -485,6 +515,7 @@ describe('MysqlClient', function (): void {
 
         it('releases connection back to pool after stream is fully consumed', function (): void {
             $client = makeClient(maxConnections: 1);
+
             try {
                 $stream = await($client->stream('SELECT 1 AS val UNION SELECT 2'));
 
@@ -501,6 +532,7 @@ describe('MysqlClient', function (): void {
 
         it('streams an empty result set without error', function (): void {
             $client = makeClient();
+
             try {
                 $stream = await($client->stream('SELECT 1 WHERE 1 = 0'));
 
@@ -517,6 +549,7 @@ describe('MysqlClient', function (): void {
 
         it('stream stats report correct row count', function (): void {
             $client = makeClient();
+
             try {
                 $stream = await($client->stream(
                     'SELECT 1 AS val UNION SELECT 2 UNION SELECT 3'
@@ -537,8 +570,10 @@ describe('MysqlClient', function (): void {
 
         it('returns a ManagedPreparedStatement', function (): void {
             $client = makeClient();
+
             try {
                 $stmt = await($client->prepare('SELECT ? AS val'));
+
                 try {
                     expect($stmt)->toBeInstanceOf(ManagedPreparedStatement::class);
                 } finally {
@@ -551,8 +586,10 @@ describe('MysqlClient', function (): void {
 
         it('executes a prepared statement and returns the correct result', function (): void {
             $client = makeClient();
+
             try {
                 $stmt = await($client->prepare('SELECT ? AS val'));
+
                 try {
                     $result = await($stmt->execute([42]));
                     expect($result->fetchOne()['val'])->toBe(42);
@@ -566,8 +603,10 @@ describe('MysqlClient', function (): void {
 
         it('reuses the same prepared statement for multiple executions', function (): void {
             $client = makeClient();
+
             try {
                 $stmt = await($client->prepare('SELECT ? AS val'));
+
                 try {
                     $result1 = await($stmt->execute([1]));
                     $result2 = await($stmt->execute([2]));
@@ -585,6 +624,7 @@ describe('MysqlClient', function (): void {
 
         it('releases connection back to pool on prepare failure', function (): void {
             $client = makeClient(maxConnections: 1);
+
             try {
                 try {
                     await($client->prepare('NOT VALID SQL ???'));
@@ -604,6 +644,7 @@ describe('MysqlClient', function (): void {
 
         it('reuses cached statement across multiple query() calls', function (): void {
             $client = makeClient(statementCacheSize: 10);
+
             try {
                 $result1 = await($client->query('SELECT ? AS val', [1]));
                 $result2 = await($client->query('SELECT ? AS val', [2]));
@@ -618,6 +659,7 @@ describe('MysqlClient', function (): void {
 
         it('clearStatementCache() does not break subsequent queries', function (): void {
             $client = makeClient();
+
             try {
                 await($client->query('SELECT ? AS val', [1]));
 
@@ -632,6 +674,7 @@ describe('MysqlClient', function (): void {
 
         it('works correctly with cache disabled', function (): void {
             $client = makeClient(enableStatementCache: false);
+
             try {
                 $result1 = await($client->query('SELECT ? AS val', [10]));
                 $result2 = await($client->query('SELECT ? AS val', [20]));
@@ -646,6 +689,7 @@ describe('MysqlClient', function (): void {
 
         it('clearStatementCache() is safe when cache is disabled', function (): void {
             $client = makeClient(enableStatementCache: false);
+
             try {
                 $client->clearStatementCache();
 
@@ -688,6 +732,7 @@ describe('MysqlClient', function (): void {
 
         it('executes a plain SELECT over a compressed connection', function (): void {
             $client = makeCompressedClient();
+
             try {
                 $result = await($client->query('SELECT 1 AS val'));
                 expect($result->fetchOne()['val'])->toBe('1');
@@ -698,6 +743,7 @@ describe('MysqlClient', function (): void {
 
         it('executes a SELECT with params over a compressed connection', function (): void {
             $client = makeCompressedClient();
+
             try {
                 $result = await($client->query('SELECT ? AS val', [42]));
                 expect($result->fetchOne()['val'])->toBe(42);
@@ -708,6 +754,7 @@ describe('MysqlClient', function (): void {
 
         it('executes multiple sequential queries over a compressed connection', function (): void {
             $client = makeCompressedClient();
+
             try {
                 $result1 = await($client->query('SELECT 1 AS val'));
                 $result2 = await($client->query('SELECT 2 AS val'));
@@ -724,6 +771,7 @@ describe('MysqlClient', function (): void {
 
         it('reports compression_enabled true in stats when compress is requested and server supports it', function (): void {
             $client = makeCompressedClient();
+
             try {
                 await($client->query('SELECT 1'));
                 expect($client->stats['compression_enabled'])->toBeTrue();
@@ -734,6 +782,7 @@ describe('MysqlClient', function (): void {
 
         it('reports compression_enabled false in stats for uncompressed client', function (): void {
             $client = makeClient();
+
             try {
                 await($client->query('SELECT 1'));
                 expect($client->stats['compression_enabled'])->toBeFalse();
@@ -744,6 +793,7 @@ describe('MysqlClient', function (): void {
 
         it('executes INSERT and DELETE over a compressed connection', function (): void {
             $client = makeCompressedClient();
+
             try {
                 $affectedRows = await($client->execute(
                     "INSERT INTO mysql_client_test (name) VALUES ('compression_test')"
@@ -763,6 +813,7 @@ describe('MysqlClient', function (): void {
 
         it('executes INSERT and DELETE with params over a compressed connection', function (): void {
             $client = makeCompressedClient();
+
             try {
                 $affectedRows = await($client->execute(
                     'INSERT INTO mysql_client_test (name) VALUES (?)',
@@ -784,6 +835,7 @@ describe('MysqlClient', function (): void {
 
         it('handles large payload over a compressed connection', function (): void {
             $client = makeCompressedClient();
+
             try {
                 $largeValue = str_repeat('ABCDEFGHIJ', 100);
 
@@ -805,6 +857,7 @@ describe('MysqlClient', function (): void {
 
         it('fetches a large result set over a compressed connection', function (): void {
             $client = makeCompressedClient();
+
             try {
                 $result = await($client->query("SHOW VARIABLES LIKE '%buffer%'"));
                 expect($result->rowCount)->toBeGreaterThanOrEqual(1);
@@ -815,6 +868,7 @@ describe('MysqlClient', function (): void {
 
         it('streams rows over a compressed connection', function (): void {
             $client = makeCompressedClient();
+
             try {
                 $stream = await($client->stream(
                     'SELECT name FROM mysql_client_test WHERE id > ? LIMIT 3',
@@ -836,6 +890,7 @@ describe('MysqlClient', function (): void {
 
         it('releases connection back to pool after compressed query', function (): void {
             $client = makeCompressedClient(maxConnections: 1);
+
             try {
                 await($client->query('SELECT 1'));
                 await($client->query('SELECT 2'));
@@ -848,6 +903,7 @@ describe('MysqlClient', function (): void {
 
         it('releases connection back to pool after failed compressed query', function (): void {
             $client = makeCompressedClient(maxConnections: 1);
+
             try {
                 try {
                     await($client->query('SELECT * FROM non_existent_table_xyz'));
@@ -864,8 +920,10 @@ describe('MysqlClient', function (): void {
 
         it('executes prepared statement over a compressed connection', function (): void {
             $client = makeCompressedClient();
+
             try {
                 $stmt = await($client->prepare('SELECT ? AS val'));
+
                 try {
                     $result = await($stmt->execute([99]));
                     expect($result->fetchOne()['val'])->toBe(99);
@@ -882,6 +940,7 @@ describe('MysqlClient', function (): void {
 
         it('automatically closes when unset', function (): void {
             $client = makeClient();
+
             try {
                 await($client->query('SELECT 1'));
                 expect($client->stats['pooled_connections'])->toBeGreaterThanOrEqual(1);
@@ -906,6 +965,7 @@ describe('MysqlClient', function (): void {
 
         it('demonstrates state leakage without reset_connection', function (): void {
             $client = makeNoResetClient(maxConnections: 1);
+
             try {
                 await($client->query("SET @leak_var = 'I_AM_A_LEAKED_VARIABLE'"));
 
@@ -918,6 +978,7 @@ describe('MysqlClient', function (): void {
 
         it('clears session variables between pool reuses with reset_connection enabled', function (): void {
             $client = makeResetClient(maxConnections: 1);
+
             try {
                 await($client->query("SET @my_var = 'I_SHOULD_BE_DELETED'"));
 
@@ -930,11 +991,12 @@ describe('MysqlClient', function (): void {
 
         it('clears multiple session variables between pool reuses', function (): void {
             $client = makeResetClient(maxConnections: 1);
+
             try {
                 await($client->query('SET @a = 1, @b = 2, @c = 3'));
 
                 $result = await($client->query('SELECT @a AS a, @b AS b, @c AS c'));
-                $row    = $result->fetchOne();
+                $row = $result->fetchOne();
 
                 expect($row['a'])->toBeNull()
                     ->and($row['b'])->toBeNull()
@@ -947,6 +1009,7 @@ describe('MysqlClient', function (): void {
 
         it('handles prepared statement cache invalidation after reset', function (): void {
             $client = makeResetClient(maxConnections: 1);
+
             try {
                 $result1 = await($client->query('SELECT ? AS num', [100]));
                 expect($result1->fetchOne()['num'])->toBe(100);
@@ -960,6 +1023,7 @@ describe('MysqlClient', function (): void {
 
         it('state does not leak across multiple pool reuses', function (): void {
             $client = makeResetClient(maxConnections: 1);
+
             try {
                 for ($i = 1; $i <= 5; $i++) {
                     await($client->query("SET @counter = {$i}"));
@@ -974,6 +1038,7 @@ describe('MysqlClient', function (): void {
 
         it('does not leak state between different logical requests on a shared pool', function (): void {
             $client = makeResetClient(maxConnections: 1);
+
             try {
                 $tx = await($client->beginTransaction());
                 await($tx->query("SET @request_id = 'request_A'"));
@@ -990,6 +1055,7 @@ describe('MysqlClient', function (): void {
 
         it('connection remains healthy and reusable across multiple resets', function (): void {
             $client = makeResetClient(maxConnections: 1);
+
             try {
                 for ($i = 1; $i <= 5; $i++) {
                     $result = await($client->query('SELECT ? AS val', [$i]));
@@ -1005,7 +1071,8 @@ describe('MysqlClient', function (): void {
 
         it('throws PoolException immediately when waiter queue is full', function (): void {
             $maxWaiters = 3;
-            $client     = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
+            $client = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
+
             try {
                 $client->query('DO SLEEP(2)')->catch(fn () => null);
                 $client->query('DO SLEEP(2)')->catch(fn () => null);
@@ -1022,7 +1089,8 @@ describe('MysqlClient', function (): void {
 
         it('waiting_requests stat reflects queued requests up to the limit', function (): void {
             $maxWaiters = 5;
-            $client     = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
+            $client = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
+
             try {
                 $client->query('DO SLEEP(2)')->catch(fn () => null);
                 $client->query('DO SLEEP(2)')->catch(fn () => null);
@@ -1039,7 +1107,8 @@ describe('MysqlClient', function (): void {
 
         it('does not throw when requests stay within waiter limit', function (): void {
             $maxWaiters = 5;
-            $client     = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
+            $client = makeWaiterClient(maxConnections: 2, maxWaiters: $maxWaiters);
+
             try {
                 $client->query('DO SLEEP(2)')->catch(fn () => null);
                 $client->query('DO SLEEP(2)')->catch(fn () => null);
@@ -1056,8 +1125,9 @@ describe('MysqlClient', function (): void {
 
         it('queued requests execute successfully once a connection is released', function (): void {
             $client = makeWaiterClient(maxConnections: 1, maxWaiters: 2);
+
             try {
-                $slow    = $client->query('DO SLEEP(1)');
+                $slow = $client->query('DO SLEEP(1)');
                 $pending = $client->query('SELECT ? AS val', [42]);
 
                 await($slow);
@@ -1071,7 +1141,8 @@ describe('MysqlClient', function (): void {
 
         it('only the overflow request is rejected, queued requests still execute', function (): void {
             $maxWaiters = 2;
-            $client     = makeWaiterClient(maxConnections: 1, maxWaiters: $maxWaiters);
+            $client = makeWaiterClient(maxConnections: 1, maxWaiters: $maxWaiters);
+
             try {
                 $slow = $client->query('DO SLEEP(1)');
 
@@ -1095,8 +1166,9 @@ describe('MysqlClient', function (): void {
 
         it('pool recovers and accepts new requests after overflow rejection', function (): void {
             $client = makeWaiterClient(maxConnections: 1, maxWaiters: 1);
+
             try {
-                $slow   = $client->query('DO SLEEP(1)');
+                $slow = $client->query('DO SLEEP(1)');
                 $queued = $client->query('SELECT ? AS val', [1]);
 
                 try {
@@ -1117,9 +1189,10 @@ describe('MysqlClient', function (): void {
 
         it('PoolException message identifies the overflow condition', function (): void {
             $client = makeWaiterClient(maxConnections: 2, maxWaiters: 1);
+
             try {
-                $slow1  = $client->query('DO SLEEP(1)');
-                $slow2  = $client->query('DO SLEEP(1)');
+                $slow1 = $client->query('DO SLEEP(1)');
+                $slow2 = $client->query('DO SLEEP(1)');
                 $queued = $client->query('SELECT 1');
 
                 $exception = null;
@@ -1147,6 +1220,7 @@ describe('MysqlClient', function (): void {
 
         it('throws TimeoutException when connection cannot be acquired within the timeout', function (): void {
             $client = makeTimeoutClient(maxConnections: 1, acquireTimeout: 1.0);
+
             try {
                 $hog = $client->query('DO SLEEP(3)');
 
@@ -1160,8 +1234,9 @@ describe('MysqlClient', function (): void {
 
         it('times out within a reasonable window of the configured timeout', function (): void {
             $client = makeTimeoutClient(maxConnections: 1, acquireTimeout: 1.0);
+
             try {
-                $hog   = $client->query('DO SLEEP(3)');
+                $hog = $client->query('DO SLEEP(3)');
                 $start = microtime(true);
 
                 try {
@@ -1180,6 +1255,7 @@ describe('MysqlClient', function (): void {
 
         it('pool recovers and accepts new requests after a timeout', function (): void {
             $client = makeTimeoutClient(maxConnections: 1, acquireTimeout: 1.0);
+
             try {
                 $hog = $client->query('DO SLEEP(2)');
 
@@ -1200,6 +1276,7 @@ describe('MysqlClient', function (): void {
 
         it('timed out request does not hold a waiting slot after expiry', function (): void {
             $client = makeTimeoutClient(maxConnections: 1, acquireTimeout: 1.0);
+
             try {
                 $hog = $client->query('DO SLEEP(3)');
 
@@ -1219,6 +1296,7 @@ describe('MysqlClient', function (): void {
 
         it('multiple concurrent requests all timeout when pool is exhausted', function (): void {
             $client = makeTimeoutClient(maxConnections: 1, acquireTimeout: 1.0);
+
             try {
                 $hog = $client->query('DO SLEEP(3)');
 
@@ -1247,6 +1325,7 @@ describe('MysqlClient', function (): void {
 
         it('pool is fully healthy after multiple timeouts', function (): void {
             $client = makeTimeoutClient(maxConnections: 1, acquireTimeout: 1.0);
+
             try {
                 $hog = $client->query('DO SLEEP(2)');
 
@@ -1279,6 +1358,7 @@ describe('MysqlClient', function (): void {
 
         it('rejects stacked queries when multi_statements is disabled by default', function (): void {
             $client = makeClient();
+
             try {
                 expect(fn () => await($client->query('SELECT 1; SELECT 2')))
                     ->toThrow(QueryException::class)
@@ -1289,8 +1369,9 @@ describe('MysqlClient', function (): void {
         });
 
         it('rejects with a syntax error code when multi_statements is disabled', function (): void {
-            $client    = makeClient();
+            $client = makeClient();
             $exception = null;
+
             try {
                 try {
                     await($client->query('SELECT 1; SELECT 2'));
@@ -1308,6 +1389,7 @@ describe('MysqlClient', function (): void {
 
         it('executes stacked queries when multi_statements is enabled', function (): void {
             $client = makeMultiStatementClient();
+
             try {
                 $result = await($client->query('SELECT 100 AS a; SELECT 200 AS b'));
                 expect($result->fetchOne()['a'])->toBe('100');
@@ -1318,6 +1400,7 @@ describe('MysqlClient', function (): void {
 
         it('provides access to the second result set via nextResult()', function (): void {
             $client = makeMultiStatementClient();
+
             try {
                 $result1 = await($client->query('SELECT 100 AS a; SELECT 200 AS b'));
                 $result2 = $result1->nextResult();
@@ -1332,6 +1415,7 @@ describe('MysqlClient', function (): void {
 
         it('returns null for nextResult() when there is only one result set', function (): void {
             $client = makeMultiStatementClient();
+
             try {
                 $result = await($client->query('SELECT 1 AS val'));
                 expect($result->nextResult())->toBeNull();
@@ -1342,6 +1426,7 @@ describe('MysqlClient', function (): void {
 
         it('executes three stacked queries and returns all result sets', function (): void {
             $client = makeMultiStatementClient();
+
             try {
                 $result1 = await($client->query('SELECT 1 AS n; SELECT 2 AS n; SELECT 3 AS n'));
                 $result2 = $result1->nextResult();
@@ -1360,6 +1445,7 @@ describe('MysqlClient', function (): void {
 
         it('releases connection back to pool after multi-statement query', function (): void {
             $client = makeMultiStatementClient(maxConnections: 1);
+
             try {
                 await($client->query('SELECT 1; SELECT 2'));
                 await($client->query('SELECT 3; SELECT 4'));
@@ -1372,6 +1458,7 @@ describe('MysqlClient', function (): void {
 
         it('executes a normal single query correctly after a multi-statement query', function (): void {
             $client = makeMultiStatementClient(maxConnections: 1);
+
             try {
                 await($client->query('SELECT 1; SELECT 2'));
 
@@ -1395,6 +1482,7 @@ describe('MysqlClient', function (): void {
                     return $conn->execute("SET SESSION time_zone = '+05:30'");
                 }
             );
+
             try {
                 $tz = await($client->fetchValue('SELECT @@session.time_zone'));
 
@@ -1416,6 +1504,7 @@ describe('MysqlClient', function (): void {
                     return $conn->execute("SET SESSION time_zone = '+05:30'");
                 }
             );
+
             try {
                 await($client->fetchValue('SELECT @@session.time_zone'));
                 await($client->fetchValue('SELECT @@session.time_zone'));
@@ -1430,6 +1519,7 @@ describe('MysqlClient', function (): void {
             $client = makeOnConnectClient(
                 onConnect: fn (ConnectionSetup $conn) => $conn->execute("SET SESSION time_zone = '+05:30'")
             );
+
             try {
                 $tz1 = await($client->fetchValue('SELECT @@session.time_zone'));
                 $tz2 = await($client->fetchValue('SELECT @@session.time_zone'));
@@ -1450,6 +1540,7 @@ describe('MysqlClient', function (): void {
                     $receivedClass = get_class($conn);
                 }
             );
+
             try {
                 await($client->fetchValue('SELECT 1'));
 
@@ -1474,6 +1565,7 @@ describe('MysqlClient', function (): void {
                     ;
                 }
             );
+
             try {
                 await($client->fetchValue('SELECT @@session.time_zone'));
                 $order[] = 'query_done';
@@ -1495,6 +1587,7 @@ describe('MysqlClient', function (): void {
                     return $conn->execute("SET SESSION time_zone = '+09:00'");
                 }
             );
+
             try {
                 [$tz1, $tz2, $tz3] = await(Promise::all([
                     $client->fetchValue('SELECT @@session.time_zone'),
@@ -1526,6 +1619,7 @@ describe('MysqlClient', function (): void {
                     'SET SESSION invalid_var_that_does_not_exist = 1'
                 )
             );
+
             try {
                 expect(fn () => await($client->fetchValue('SELECT 1')))
                     ->toThrow(QueryException::class)
@@ -1544,12 +1638,13 @@ describe('MysqlClient', function (): void {
                 onConnect: function (ConnectionSetup $conn) use (&$serverVersion): PromiseInterface {
                     return $conn->query('SELECT VERSION() AS version')
                         ->then(function (Hibla\Mysql\Interfaces\MysqlResult $result) use (&$serverVersion): void {
-                            $row           = $result->fetchOne();
+                            $row = $result->fetchOne();
                             $serverVersion = $row['version'] ?? null;
                         })
                     ;
                 }
             );
+
             try {
                 await($client->fetchValue('SELECT 1'));
                 expect($serverVersion)->not->toBeNull();
@@ -1560,6 +1655,7 @@ describe('MysqlClient', function (): void {
 
         it('no hook — normal pool behaviour is unchanged', function (): void {
             $client = makeOnConnectClient();
+
             try {
                 $result = await($client->fetchValue('SELECT 42'));
 
@@ -1582,6 +1678,7 @@ describe('MysqlClient', function (): void {
                     return $conn->execute("SET SESSION time_zone = '+05:30'");
                 }
             );
+
             try {
                 $tz1 = await($client->fetchValue('SELECT @@session.time_zone'));
 
@@ -1615,8 +1712,9 @@ describe('MysqlClient', function (): void {
                     await($conn->execute("SET SESSION sql_mode = 'STRICT_ALL_TABLES'"));
                 })
             );
+
             try {
-                $tz   = await($client->fetchValue('SELECT @@session.time_zone'));
+                $tz = await($client->fetchValue('SELECT @@session.time_zone'));
                 $mode = await($client->fetchValue('SELECT @@session.sql_mode'));
 
                 expect($hookCallCount)->toBe(1)

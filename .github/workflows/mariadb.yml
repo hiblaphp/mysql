@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   mariadb-ci:
-    name: PHP ${{ matrix.php }} - MariaDB LTS
+    name: PHP ${{ matrix.php }} - MariaDB 
     runs-on: ubuntu-latest
     
     strategy:
@@ -37,7 +37,7 @@ jobs:
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Start MariaDB Services
-        run: docker-compose up -d mariadb mariadb_ssl
+        run: docker compose up -d mariadb mariadb_ssl 
 
       - name: Wait for MariaDB Health
         run: |
@@ -57,4 +57,4 @@ jobs:
 
       - name: Shutdown Services
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v 
