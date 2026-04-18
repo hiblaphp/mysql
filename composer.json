@@ -57,12 +57,12 @@
         "test:mysql": [
             "@putenv MYSQL_PORT=3310",
             "@putenv MYSQL_SSL_PORT=3307",
-            "vendor/bin/pest"
+            "vendor/bin/pest --compact"
         ],
         "test:mariadb": [
             "@putenv MYSQL_PORT=3311",
             "@putenv MYSQL_SSL_PORT=3308",
-            "vendor/bin/pest"
+            "vendor/bin/pest --compact"
         ],
         "test:all": [
             "@test:mysql",

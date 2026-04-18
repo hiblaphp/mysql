@@ -15,7 +15,12 @@ describe('Pool Scaling and Capacity', function (): void {
         $config = testMysqlConfig();
         $pool = new PoolManager($config, maxSize: 10, minSize: 3);
 
-        await(delay(0.1));
+        $attempts = 0;
+
+        while ($pool->stats['active_connections'] < 3 && $attempts < 30) {
+            await(delay(0.1));
+            $attempts++;
+        }
 
         expect($pool->stats['active_connections'])->toBe(3);
         $pool->close();
@@ -119,13 +124,23 @@ describe('Pool Scaling and Capacity', function (): void {
 
     it('replenishes back to minSize when a connection is closed externally', function (): void {
         $pool = new PoolManager(testMysqlConfig(), maxSize: 5, minSize: 2);
-        await(delay(0.1));
+
+        $attempts = 0;
+        while ($pool->stats['active_connections'] < 2 && $attempts < 30) {
+            await(delay(0.1));
+            $attempts++;
+        }
 
         $c1 = await($pool->get());
         $c1->close();
         $pool->release($c1);
 
-        await(delay(0.2));
+        $attempts = 0;
+        while ($pool->stats['active_connections'] < 2 && $attempts < 30) {
+            await(delay(0.1));
+            $attempts++;
+        }
+
         expect($pool->stats['active_connections'])->toBe(2);
 
         $pool->close();
@@ -139,7 +154,7 @@ describe('Pool Scaling and Capacity', function (): void {
 
         expect($pool->stats['pooled_connections'])->toBe(1);
 
-        await(delay(1.2));
+        await(delay(1.5));
 
         $c2 = await($pool->get());
         expect($pool->stats['active_connections'])->toBe(1);
@@ -153,7 +168,7 @@ describe('Pool Scaling and Capacity', function (): void {
         $pool = new PoolManager(testMysqlConfig(), maxSize: 5, minSize: 0, maxLifetime: 1);
 
         $c1 = await($pool->get());
-        await(delay(1.2));
+        await(delay(1.5));
 
         $pool->release($c1);
 
@@ -166,7 +181,8 @@ describe('Pool Scaling and Capacity', function (): void {
     it('tracks connections in draining state when query is cancelled', function (): void {
         $client = makeClient(maxConnections: 1, enableServerSideCancellation: true);
 
-        $promise = $client->query('SELECT SLEEP(2)');
+        // Increased to 5s so it definitely doesn't complete naturally if the kill takes a second
+        $promise = $client->query('SELECT SLEEP(5)');
         await(delay(0.1));
         $promise->cancel();
 
@@ -177,7 +193,13 @@ describe('Pool Scaling and Capacity', function (): void {
 
         expect($client->stats['draining_connections'])->toBe(1);
 
-        await(delay(0.5));
+        // Poll for up to 4s for the KILL connection to finish and DO SLEEP(0) to resolve
+        $attempts = 0;
+        while ($client->stats['draining_connections'] > 0 && $attempts < 40) {
+            await(delay(0.1));
+            $attempts++;
+        }
+
         expect($client->stats['draining_connections'])->toBe(0);
         expect($client->stats['pooled_connections'])->toBe(1);
 
@@ -338,7 +360,12 @@ describe('Pool Scaling and Capacity', function (): void {
 
     it('properly cleans up when client is unset (GC test)', function (): void {
         $client = makeClient(minConnections: 2);
-        await(delay(0.1));
+
+        $attempts = 0;
+        while ($client->stats['active_connections'] < 2 && $attempts < 30) {
+            await(delay(0.1));
+            $attempts++;
+        }
 
         $stats = $client->stats;
         expect($stats['active_connections'])->toBe(2);
@@ -371,7 +398,13 @@ describe('Pool Scaling and Capacity', function (): void {
 
         expect($client->stats['draining_connections'])->toBe(1);
 
-        await(delay(0.2));
+        $attempts = 0;
+
+        while ($client->stats['draining_connections'] > 0 && $attempts < 20) {
+            await(delay(0.1));
+            $attempts++;
+        }
+
         expect($client->stats['pooled_connections'])->toBe(1);
         $client->close();
     });
