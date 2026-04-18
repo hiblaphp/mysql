@@ -503,7 +503,7 @@ Rolling back to a savepoint also **clears the tainted state** on the transaction
 
 **Automatic rollback on partial failure.** When using `transaction()`, any unhandled exception from the callback causes an automatic `ROLLBACK` before the exception propagates to the caller. The transaction is never left open and the connection is returned to the pool cleanly.
 
-**GC safety net.** If a `Transaction` object is garbage collected without an explicit `commit()` or `rollback()`, a `ROLLBACK` is issued automatically and the connection is returned to the pool. This is a best-effort safety net only — the destructor cannot `await`, so the rollback may be abandoned if the event loop is under pressure. Always manage the lifecycle explicitly.
+**GC safety net.** If a `Transaction` object is garbage collected without an explicit `commit()` or `rollback()`, a `ROLLBACK` is issued automatically and the connection is returned to the pool. This is just a safety net and always manage the lifecycle explicitly.
 
 **`commit()` and `rollback()` are not cancellable.** Dispatching `KILL QUERY` against a commit or rollback would leave the transaction in an undefined state on the server. These operations always run to completion regardless of the `enableServerSideCancellation` setting.
 
