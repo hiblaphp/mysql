@@ -43,9 +43,8 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(1.5);
 
@@ -63,9 +62,8 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         await(delay(0.1));
 
@@ -89,9 +87,8 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         expect(round(microtime(true) - $startTime, 2))->toBeLessThan(1.5);
 
@@ -110,9 +107,8 @@ describe('Client Stream Cancellation', function (): void {
             $streamPromise->cancel();
         });
 
-        expect(fn () => await($streamPromise))
-            ->toThrow(CancelledException::class)
-        ;
+        expect(fn() => await($streamPromise))
+            ->toThrow(CancelledException::class);
 
         await(delay(0.1));
 
@@ -256,7 +252,11 @@ describe('Client Stream Cancellation', function (): void {
             }
         }
 
-        await(delay(0.5));
+        $attempts = 0;
+        while ($client->stats['draining_connections'] > 0 && $attempts < 40) {
+            await(delay(0.1));
+            $attempts++;
+        }
 
         $result = await($client->query('SELECT "PoolRecovered" AS status'));
 
