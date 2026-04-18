@@ -37,3 +37,42 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  mariadb:
+    image: mariadb:lts
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: test
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+    ports:
+      - "3311:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  mariadb_ssl:
+    image: mariadb:lts
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: test
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+    ports:
+      - "3308:3306"
+    volumes:
+      - ./tests/Fixtures/ssl/ca.pem:/etc/mysql/ssl/ca.pem:ro
+      - ./tests/Fixtures/ssl/server-cert.pem:/etc/mysql/ssl/server-cert.pem:ro
+      - ./tests/Fixtures/ssl/server-key.pem:/etc/mysql/ssl/server-key.pem:ro
+    command: >
+      --require_secure_transport=ON
+      --ssl_ca=/etc/mysql/ssl/ca.pem
+      --ssl_cert=/etc/mysql/ssl/server-cert.pem
+      --ssl_key=/etc/mysql/ssl/server-key.pem
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

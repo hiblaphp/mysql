@@ -947,7 +947,15 @@ describe('PreparedStatement', function (): void {
         it('handles JSON object', function (): void {
             $conn = makeConnection();
             $json = '{"name":"John","age":30}';
-            $stmt = await($conn->prepare('SELECT CAST(? AS JSON) as json_val'));
+                        try {
+                $stmt = await($conn->prepare('SELECT CAST(? AS JSON) as json_val'));
+            } catch (\Throwable $e) {
+                if ($e->getCode() === 1064) {
+                    $conn->close();
+                    test()->markTestSkipped('MariaDB does not support CAST(... AS JSON)');
+                }
+                throw $e;
+            }
             $result = await($stmt->execute([$json]));
             $row = $result->fetchOne();
             $decoded = json_decode($row['json_val'], true);
@@ -963,7 +971,15 @@ describe('PreparedStatement', function (): void {
         it('handles JSON array', function (): void {
             $conn = makeConnection();
             $json = '[1,2,3,4,5]';
-            $stmt = await($conn->prepare('SELECT CAST(? AS JSON) as json_val'));
+                        try {
+                $stmt = await($conn->prepare('SELECT CAST(? AS JSON) as json_val'));
+            } catch (\Throwable $e) {
+                if ($e->getCode() === 1064) {
+                    $conn->close();
+                    test()->markTestSkipped('MariaDB does not support CAST(... AS JSON)');
+                }
+                throw $e;
+            }
             $result = await($stmt->execute([$json]));
             $row = $result->fetchOne();
             $decoded = json_decode($row['json_val'], true);
@@ -977,7 +993,15 @@ describe('PreparedStatement', function (): void {
         it('handles nested JSON', function (): void {
             $conn = makeConnection();
             $json = '{"user":{"name":"Alice","roles":["admin","user"]}}';
-            $stmt = await($conn->prepare('SELECT CAST(? AS JSON) as json_val'));
+                        try {
+                $stmt = await($conn->prepare('SELECT CAST(? AS JSON) as json_val'));
+            } catch (\Throwable $e) {
+                if ($e->getCode() === 1064) {
+                    $conn->close();
+                    test()->markTestSkipped('MariaDB does not support CAST(... AS JSON)');
+                }
+                throw $e;
+            }
             $result = await($stmt->execute([$json]));
             $row = $result->fetchOne();
             $decoded = json_decode($row['json_val'], true);

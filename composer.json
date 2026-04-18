@@ -11,8 +11,8 @@
     ],
     "authors": [
         {
-           "name" : "Reymart A. Calicdan",
-           "email" : "reymart.calicdan06@gmail.com"
+            "name": "Reymart A. Calicdan",
+            "email": "reymart.calicdan06@gmail.com"
         }
     ],
     "autoload": {
@@ -54,6 +54,20 @@
     "prefer-stable": true,
     "scripts": {
         "test": "vendor/bin/pest",
+        "test:mysql": [
+            "@putenv MYSQL_PORT=3310",
+            "@putenv MYSQL_SSL_PORT=3307",
+            "vendor/bin/pest"
+        ],
+        "test:mariadb": [
+            "@putenv MYSQL_PORT=3311",
+            "@putenv MYSQL_SSL_PORT=3308",
+            "vendor/bin/pest"
+        ],
+        "test:all": [
+            "@test:mysql",
+            "@test:mariadb"
+        ],
         "format": "vendor/bin/pint",
         "analyze": "vendor/bin/phpstan analyse"
     }
