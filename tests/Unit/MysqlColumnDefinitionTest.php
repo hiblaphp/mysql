@@ -28,7 +28,8 @@ describe('MysqlColumnDefinition', function (): void {
             ->and($col->table)->toBe('u')
             ->and($col->orgTable)->toBe('users')
             ->and($col->name)->toBe('uid')
-            ->and($col->orgName)->toBe('id');
+            ->and($col->orgName)->toBe('id')
+        ;
     });
 
     describe('Type Resolution', function (): void {
@@ -38,14 +39,14 @@ describe('MysqlColumnDefinition', function (): void {
 
             $unsigned = new MysqlColumnDefinition(createRawCol([
                 'type' => MysqlType::LONG,
-                'flags' => ColumnFlags::UNSIGNED_FLAG
+                'flags' => ColumnFlags::UNSIGNED_FLAG,
             ]));
 
             expect($unsigned->typeName)->toBe('INT UNSIGNED');
 
             $tiny = new MysqlColumnDefinition(createRawCol([
                 'type' => MysqlType::TINY,
-                'flags' => ColumnFlags::UNSIGNED_FLAG
+                'flags' => ColumnFlags::UNSIGNED_FLAG,
             ]));
 
             expect($tiny->typeName)->toBe('TINYINT UNSIGNED');
@@ -82,14 +83,14 @@ describe('MysqlColumnDefinition', function (): void {
         it('calculates character length based on bytes-per-character', function (): void {
             $utf8mb4 = new MysqlColumnDefinition(createRawCol([
                 'charset' => CharsetIdentifiers::UTF8MB4,
-                'columnLength' => 40
+                'columnLength' => 40,
             ]));
 
             expect($utf8mb4->length)->toBe(10);
 
             $latin1 = new MysqlColumnDefinition(createRawCol([
                 'charset' => CharsetIdentifiers::LATIN1,
-                'columnLength' => 40
+                'columnLength' => 40,
             ]));
 
             expect($latin1->length)->toBe(40);
@@ -129,7 +130,7 @@ describe('MysqlColumnDefinition', function (): void {
 
     it('resolves a human-readable list of flags', function (): void {
         $raw = createRawCol([
-            'flags' => ColumnFlags::NOT_NULL_FLAG | ColumnFlags::PRI_KEY_FLAG | ColumnFlags::UNSIGNED_FLAG | 0x200
+            'flags' => ColumnFlags::NOT_NULL_FLAG | ColumnFlags::PRI_KEY_FLAG | ColumnFlags::UNSIGNED_FLAG | 0x200,
         ]);
 
         $col = new MysqlColumnDefinition($raw);
@@ -137,6 +138,7 @@ describe('MysqlColumnDefinition', function (): void {
         expect($col->resolvedFlags)->toContain('NOT NULL')
             ->and($col->resolvedFlags)->toContain('PRIMARY KEY')
             ->and($col->resolvedFlags)->toContain('UNSIGNED')
-            ->and($col->resolvedFlags)->toContain('AUTO INCREMENT');
+            ->and($col->resolvedFlags)->toContain('AUTO INCREMENT')
+        ;
     });
 });

@@ -31,6 +31,7 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
      * @param int $numParams Number of parameters the statement expects.
      * @param array<int, ColumnDefinition> $columnDefinitions Metadata for result set columns.
      * @param array<int, ColumnDefinition> $paramDefinitions Metadata for parameters.
+     * @param array<int, string> $paramMap Positional index to named parameter mapping.
      */
     public function __construct(
         private readonly Connection $connection,
@@ -38,14 +39,15 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
         public readonly int $numColumns,
         public readonly int $numParams,
         public readonly array $columnDefinitions = [],
-        public readonly array $paramDefinitions = []
+        public readonly array $paramDefinitions = [],
+        public readonly array $paramMap = []
     ) {
     }
 
     /**
      * {@inheritdoc}
      *
-     * @param array<int, mixed> $params
+     * @param array<int|string, mixed> $params
      *
      * @return PromiseInterface<MysqlResult>
      */
@@ -53,6 +55,17 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
     {
         if ($this->isClosed) {
             throw new PreparedException('Cannot execute a closed statement.');
+        }
+
+        if ($this->paramMap !== []) {
+            $mappedParams = [];
+            foreach ($this->paramMap as $index => $name) {
+                if (! \array_key_exists($name, $params)) {
+                    throw new \InvalidArgumentException("Missing value for named parameter: :{$name}");
+                }
+                $mappedParams[$index] = $params[$name];
+            }
+            $params = $mappedParams;
         }
 
         if (\count($params) !== $this->numParams) {
@@ -69,7 +82,7 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
     /**
      * {@inheritdoc}
      *
-     * @param array<int, mixed> $params
+     * @param array<int|string, mixed> $params
      * @param int $bufferSize Maximum rows to buffer before applying backpressure (default: 100)
      *
      * @return PromiseInterface<MysqlRowStream>
@@ -78,6 +91,17 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
     {
         if ($this->isClosed) {
             throw new PreparedException('Cannot execute a closed statement.');
+        }
+
+        if ($this->paramMap !== []) {
+            $mappedParams = [];
+            foreach ($this->paramMap as $index => $name) {
+                if (! \array_key_exists($name, $params)) {
+                    throw new \InvalidArgumentException("Missing value for named parameter: :{$name}");
+                }
+                $mappedParams[$index] = $params[$name];
+            }
+            $params = $mappedParams;
         }
 
         if (\count($params) !== $this->numParams) {
@@ -152,16 +176,16 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
     }
 
     /**
-     * Normalize parameters (convert booleans to integers).
+     * Normalize parameters (convert booleans to integers and strip keys).
      *
-     * @param array<int, mixed> $params
+     * @param array<int|string, mixed> $params
      *
      * @return array<int, mixed>
      */
     private function normalizeParameters(array $params): array
     {
         $normalized = [];
-        foreach ($params as $index => $value) {
+        foreach (array_values($params) as $index => $value) {
             $normalized[$index] = \is_bool($value) ? ($value ? 1 : 0) : $value;
         }
 

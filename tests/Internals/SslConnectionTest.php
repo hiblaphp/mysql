@@ -167,7 +167,7 @@ describe('Real SSL/TLS Connection', function (): void {
         $conn = await(Connection::create($config));
 
         $serverLimit = await($conn->query("SHOW VARIABLES LIKE 'max_allowed_packet'"))->fetchOne()['Value'];
-        
+
         $targetSize = 20 * 1024 * 1024;
         $payloadSize = 17 * 1024 * 1024;
 

@@ -349,8 +349,10 @@ class Connection
      */
     public function prepare(string $sql): PromiseInterface
     {
+        [$parsedSql, $paramMap] = NameParamParser::parse($sql);
+
         /** @var PromiseInterface<PreparedStatement> */
-        return $this->enqueueCommand(CommandRequest::TYPE_PREPARE, $sql);
+        return $this->enqueueCommand(CommandRequest::TYPE_PREPARE, $parsedSql, context: $paramMap);
     }
 
     /**
@@ -460,7 +462,7 @@ class Connection
     }
 
     /**
-     * @param array<int, mixed> $params
+     * @param array<int|string, mixed> $params
      *
      * @return PromiseInterface<Result>
      */
@@ -477,7 +479,7 @@ class Connection
     }
 
     /**
-     * @param array<int, mixed> $params
+     * @param array<int|string, mixed> $params
      *
      * @return PromiseInterface<StreamStats>
      */
@@ -515,7 +517,7 @@ class Connection
     /**
      * Enqueues a command for execution and returns a promise for its result.
      *
-     * @param array<int, mixed> $params
+     * @param array<int|string, mixed> $params
      *
      * @return PromiseInterface<mixed>
      */
@@ -865,7 +867,9 @@ class Connection
                     /** @var Promise<PreparedStatement> $protocolPromise */
                     $protocolPromise = new Promise();
                     $this->wireProtocolPromise($protocolPromise, $command);
-                    $prepareHandler->start($command->sql, $protocolPromise);
+                    /** @var array<int, string> $paramMap */
+                    $paramMap = (array) $command->context;
+                    $prepareHandler->start($command->sql, $paramMap, $protocolPromise);
                 }
 
                 break;

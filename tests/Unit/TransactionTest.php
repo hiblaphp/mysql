@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Hibla\Mysql\Tests\Internals;
 
-use Hibla\Mysql\Internals\Connection;
 use Hibla\Mysql\Internals\Result;
 use Hibla\Mysql\Internals\Transaction;
-use Hibla\Mysql\Manager\PoolManager;
 use Hibla\Promise\Promise;
 use Hibla\Sql\Exceptions\TransactionException;
-use Mockery;
 
 use function Hibla\await;
 use function Hibla\delay;
@@ -22,7 +19,8 @@ describe('Transaction', function (): void {
         $tx = new Transaction($conn, $pool);
 
         expect($tx->isActive())->toBeTrue()
-            ->and($tx->isClosed())->toBeFalse();
+            ->and($tx->isClosed())->toBeFalse()
+        ;
     });
 
     it('isActive() returns false once commit() completes', function (): void {
@@ -52,8 +50,8 @@ describe('Transaction', function (): void {
 
         $tx = new Transaction($conn, $pool);
         await($tx->commit());
-        
-        expect($tx->isActive())->toBeFalse(); 
+
+        expect($tx->isActive())->toBeFalse();
     });
 
     it('commit() invokes onCommit callbacks and clears onRollback callbacks', function (): void {
@@ -61,9 +59,11 @@ describe('Transaction', function (): void {
         $conn->shouldReceive('query')->with('COMMIT')->once()->andReturn(Promise::resolved(new Result()));
 
         $called = false;
-        $tx     = new Transaction($conn, $pool);
-        $tx->onCommit(function () use (&$called): void { $called = true; });
-        $tx->onRollback(fn () => null); 
+        $tx = new Transaction($conn, $pool);
+        $tx->onCommit(function () use (&$called): void {
+            $called = true;
+        });
+        $tx->onRollback(fn () => null);
 
         await($tx->commit());
 
@@ -74,7 +74,8 @@ describe('Transaction', function (): void {
         [$conn, $pool] = makeTxMocks();
         $conn->shouldReceive('query')
              ->with('SELECT fail')
-             ->andReturn(Promise::rejected(new \RuntimeException('DB error')));
+             ->andReturn(Promise::rejected(new \RuntimeException('DB error')))
+        ;
 
         $tx = new Transaction($conn, $pool);
 
@@ -83,12 +84,12 @@ describe('Transaction', function (): void {
         } catch (\Throwable) {
         }
 
-        expect(fn() => await($tx->commit()))->toThrow(TransactionException::class);
+        expect(fn () => await($tx->commit()))->toThrow(TransactionException::class);
     });
 
     it('rollback() releases the connection back to the pool', function (): void {
         [$conn, $pool] = makeTxMocks();
-      
+
         $conn->shouldReceive('query')->with('ROLLBACK')->once()->andReturn(Promise::resolved(new Result()));
         $pool->shouldReceive('release')->once()->with($conn);
 
@@ -103,9 +104,11 @@ describe('Transaction', function (): void {
         $conn->shouldReceive('query')->with('ROLLBACK')->once()->andReturn(Promise::resolved(new Result()));
 
         $called = false;
-        $tx     = new Transaction($conn, $pool);
-        $tx->onRollback(function () use (&$called): void { $called = true; });
-        $tx->onCommit(fn () => null); 
+        $tx = new Transaction($conn, $pool);
+        $tx->onRollback(function () use (&$called): void {
+            $called = true;
+        });
+        $tx->onCommit(fn () => null);
 
         await($tx->rollback());
 
@@ -117,7 +120,7 @@ describe('Transaction', function (): void {
         $conn->shouldReceive('query')->with('COMMIT')->once()->andReturn(Promise::resolved(new Result()));
 
         $tx = new Transaction($conn, $pool);
-        await($tx->commit()); 
+        await($tx->commit());
 
         expect(fn () => $tx->query('SELECT 1'))->toThrow(TransactionException::class);
     });
@@ -126,7 +129,8 @@ describe('Transaction', function (): void {
         [$conn, $pool] = makeTxMocks();
         $conn->shouldReceive('query')
              ->with('SELECT fail')
-             ->andReturn(Promise::rejected(new \RuntimeException('err')));
+             ->andReturn(Promise::rejected(new \RuntimeException('err')))
+        ;
 
         $tx = new Transaction($conn, $pool);
 
@@ -136,23 +140,25 @@ describe('Transaction', function (): void {
         }
 
         expect(fn () => $tx->query('SELECT 1'))
-            ->toThrow(TransactionException::class, 'Transaction aborted due to a previous query error');
+            ->toThrow(TransactionException::class, 'Transaction aborted due to a previous query error')
+        ;
     });
 
     it('execute() resolves with affected row count', function (): void {
         [$conn, $pool] = makeTxMocks();
-   
+
         $conn->shouldReceive('query')
             ->with('DELETE FROM t')
             ->once()
-            ->andReturn(Promise::resolved(new Result(affectedRows: 4)));
+            ->andReturn(Promise::resolved(new Result(affectedRows: 4)))
+        ;
 
         $tx = new Transaction($conn, $pool);
         $resolved = await($tx->execute('DELETE FROM t'));
 
         expect($resolved)->toBe(4);
-        
-        await($tx->rollback()); 
+
+        await($tx->rollback());
     });
 
     it('executeGetId() resolves with last insert ID', function (): void {
@@ -160,7 +166,8 @@ describe('Transaction', function (): void {
         $conn->shouldReceive('query')
             ->with('INSERT INTO t VALUES ()')
             ->once()
-            ->andReturn(Promise::resolved(new Result(lastInsertId: 99)));
+            ->andReturn(Promise::resolved(new Result(lastInsertId: 99)))
+        ;
 
         $tx = new Transaction($conn, $pool);
         $resolved = await($tx->executeGetId('INSERT INTO t VALUES ()'));
@@ -179,17 +186,18 @@ describe('Transaction', function (): void {
 
     it('savepoint() escapes backticks in identifiers correctly', function (): void {
         [$conn, $pool] = makeTxMocks();
-        
+
         $conn->shouldReceive('query')
              ->with('SAVEPOINT `my``sp`')
              ->once()
-             ->andReturn(Promise::resolved(new Result()));
+             ->andReturn(Promise::resolved(new Result()))
+        ;
 
         $tx = new Transaction($conn, $pool);
         await($tx->savepoint('my`sp'));
 
         await($tx->rollback());
-        
+
         expect(true)->toBeTrue();
     });
 
@@ -197,12 +205,14 @@ describe('Transaction', function (): void {
         [$conn, $pool] = makeTxMocks();
         $conn->shouldReceive('query')
              ->with('SELECT fail')
-             ->andReturn(Promise::rejected(new \RuntimeException('err')));
-             
+             ->andReturn(Promise::rejected(new \RuntimeException('err')))
+        ;
+
         $conn->shouldReceive('query')
              ->with('ROLLBACK TO SAVEPOINT `sp`')
              ->once()
-             ->andReturn(Promise::resolved(new Result()));
+             ->andReturn(Promise::resolved(new Result()))
+        ;
 
         $tx = new Transaction($conn, $pool);
 
@@ -218,12 +228,12 @@ describe('Transaction', function (): void {
 
     it('__destruct issues an async ROLLBACK and releases the pool when still active', function (): void {
         [$conn, $pool] = makeTxMocks();
-        
+
         $conn->shouldReceive('query')->with('ROLLBACK')->once()->andReturn(Promise::resolved(new Result()));
         $pool->shouldReceive('release')->once()->with($conn);
 
         $tx = new Transaction($conn, $pool);
-        unset($tx); 
+        unset($tx);
 
         await(delay(0.01));
 
@@ -239,7 +249,7 @@ describe('Transaction', function (): void {
         await($tx->rollback());
 
         unset($tx);
-        
+
         await(delay(0.01));
 
         expect(true)->toBeTrue();

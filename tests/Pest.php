@@ -16,7 +16,7 @@ use function Hibla\await;
 
 uses()
     ->beforeAll(function () {
-        Promise::setRejectionHandler(fn() => null);
+        Promise::setRejectionHandler(fn () => null);
     })
     ->afterEach(function () {
         Mockery::close();
@@ -54,13 +54,13 @@ function makeTxMocks(): array
     $conn->shouldReceive('query')
         ->with('ROLLBACK')
         ->andReturn(Promise::resolved(new Result()))
-        ->byDefault();
+        ->byDefault()
+    ;
 
     $pool->shouldReceive('release')->byDefault();
 
     return [$conn, $pool];
 }
-
 
 function createMockColumn(string $name): ColumnDefinition
 {
@@ -73,12 +73,11 @@ function createMockColumn(string $name): ColumnDefinition
         orgName: $name,
         charset: 33,
         columnLength: 255,
-        type: 253, 
+        type: 253,
         flags: 0,
         decimals: 0
     );
 }
-
 
 function createMysqlConfig(bool $ssl = false): MysqlConfig
 {

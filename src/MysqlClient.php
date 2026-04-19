@@ -301,7 +301,7 @@ final class MysqlClient implements SqlClientInterface
                 if ($this->enableStatementCache) {
                     $innerPromise = $this->getCachedStatement($conn, $sql)
                         ->then(function (PreparedStatement $stmt) use ($params) {
-                            return $stmt->execute(array_values($params));
+                            return $stmt->execute($params);
                         })
                     ;
 
@@ -310,7 +310,7 @@ final class MysqlClient implements SqlClientInterface
 
                 $innerPromise = $conn->prepare($sql)
                     ->then(function (PreparedStatement $stmt) use ($params) {
-                        return $stmt->execute(array_values($params))
+                        return $stmt->execute($params)
                             ->finally(function () use ($stmt): void {
                                 $stmt->close();
                             })
@@ -469,7 +469,7 @@ final class MysqlClient implements SqlClientInterface
                 } else {
                     $innerPromise = $this->getCachedStatement($conn, $sql)
                         ->then(function (PreparedStatement $stmt) use ($params, $bufferSize) {
-                            return $stmt->executeStream(array_values($params), $bufferSize);
+                            return $stmt->executeStream($params, $bufferSize);
                         })
                     ;
                 }

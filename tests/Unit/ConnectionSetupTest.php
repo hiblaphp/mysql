@@ -15,7 +15,7 @@ use function Hibla\await;
 describe('ConnectionSetup', function (): void {
 
     it('delegates query() to the underlying connection and returns its promise', function (): void {
-        $conn     = Mockery::mock(Connection::class);
+        $conn = Mockery::mock(Connection::class);
         $expected = new Promise();
 
         $conn->shouldReceive('query')->once()->with('SELECT 1')->andReturn($expected);
