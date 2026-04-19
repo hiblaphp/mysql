@@ -28,13 +28,14 @@ describe('Connection Named Parameters', function (): void {
     it('executes a prepared statement using named parameters', function (): void {
         $conn = makeConnection();
         $stmt = await($conn->prepare('SELECT * FROM conn_named_test WHERE name = :name AND age = :age'));
-        
+
         $result = await($stmt->execute(['name' => 'Alice', 'age' => 30]));
         $row = $result->fetchOne();
 
         expect($result->rowCount)->toBe(1)
             ->and($row['id'])->toBe(1)
-            ->and($row['name'])->toBe('Alice');
+            ->and($row['name'])->toBe('Alice')
+        ;
 
         await($stmt->close());
         $conn->close();
@@ -43,12 +44,13 @@ describe('Connection Named Parameters', function (): void {
     it('handles multiple occurrences of the same named parameter', function (): void {
         $conn = makeConnection();
         $stmt = await($conn->prepare('SELECT * FROM conn_named_test WHERE name = :target OR :target = "Alice" ORDER BY id DESC LIMIT 1'));
-        
+
         $result = await($stmt->execute(['target' => 'Bob']));
         $row = $result->fetchOne();
 
         expect($row['id'])->toBe(2)
-            ->and($row['name'])->toBe('Bob');
+            ->and($row['name'])->toBe('Bob')
+        ;
 
         await($stmt->close());
         $conn->close();
@@ -57,7 +59,7 @@ describe('Connection Named Parameters', function (): void {
     it('executes a streaming query using named parameters', function (): void {
         $conn = makeConnection();
         $stmt = await($conn->prepare('SELECT * FROM conn_named_test WHERE age >= :min_age ORDER BY id'));
-        
+
         $stream = await($stmt->executeStream(['min_age' => 20]));
         expect($stream)->toBeInstanceOf(RowStream::class);
 
@@ -68,7 +70,8 @@ describe('Connection Named Parameters', function (): void {
 
         expect($rows)->toHaveCount(2)
             ->and($rows[0]['name'])->toBe('Alice')
-            ->and($rows[1]['name'])->toBe('Bob');
+            ->and($rows[1]['name'])->toBe('Bob')
+        ;
 
         await($stmt->close());
         $conn->close();
@@ -78,8 +81,9 @@ describe('Connection Named Parameters', function (): void {
         $conn = makeConnection();
         $stmt = await($conn->prepare('SELECT * FROM conn_named_test WHERE name = :name'));
 
-        expect(fn() => await($stmt->execute(['wrong_key' => 'Alice'])))
-            ->toThrow(InvalidArgumentException::class, 'Missing value for named parameter: :name');
+        expect(fn () => await($stmt->execute(['wrong_key' => 'Alice'])))
+            ->toThrow(InvalidArgumentException::class, 'Missing value for named parameter: :name')
+        ;
 
         await($stmt->close());
         $conn->close();
@@ -88,7 +92,7 @@ describe('Connection Named Parameters', function (): void {
     it('ignores extra parameters provided in the array', function (): void {
         $conn = makeConnection();
         $stmt = await($conn->prepare('SELECT * FROM conn_named_test WHERE id = :id'));
-        
+
         $result = await($stmt->execute(['id' => 2, 'extra_param' => 'ignored']));
         $row = $result->fetchOne();
 
@@ -101,8 +105,9 @@ describe('Connection Named Parameters', function (): void {
     it('throws InvalidArgumentException when parsing mixed positional and named parameters', function (): void {
         $conn = makeConnection();
 
-        expect(fn() => await($conn->prepare('SELECT * FROM conn_named_test WHERE id = ? AND name = :name')))
-            ->toThrow(InvalidArgumentException::class, 'Cannot mix named and positional parameters');
+        expect(fn () => await($conn->prepare('SELECT * FROM conn_named_test WHERE id = ? AND name = :name')))
+            ->toThrow(InvalidArgumentException::class, 'Cannot mix named and positional parameters')
+        ;
 
         $conn->close();
     });

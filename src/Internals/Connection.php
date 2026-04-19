@@ -128,7 +128,7 @@ class Connection
      *
      * @var array<int, Promise<mixed>>
      */
-    private array $pendingKills =[];
+    private array $pendingKills = [];
 
     /**
      * @param MysqlConfig|array<string, mixed>|string $config
@@ -315,7 +315,7 @@ class Connection
                 }
                 $stream->complete($stats);
             },
-            onError: function (\Throwable $e) use ($stream, $outerPromise): void {
+            onError: function (Throwable $e) use ($stream, $outerPromise): void {
                 if ($outerPromise->isPending()) {
                     $outerPromise->reject($e);
                 }
@@ -429,7 +429,7 @@ class Connection
         //
         // Both branches of the then() call teardown() so that a rejected or
         // timed-out kill never silently skips cleanup.
-        if ($this->pendingKills !==[]) {
+        if ($this->pendingKills !== []) {
             $this->awaitPendingKills()->then(
                 $this->teardown(...),
                 $this->teardown(...)
@@ -508,7 +508,8 @@ class Connection
         /** @var PromiseInterface<void> */
         return $this->enqueueCommand(
             CommandRequest::TYPE_CLOSE_STMT,
-            '',[],
+            '',
+            [],
             $stmtId
         );
     }
@@ -523,7 +524,7 @@ class Connection
     private function enqueueCommand(
         string $type,
         string $sql = '',
-        array $params =[],
+        array $params = [],
         int $stmtId = 0,
         mixed $context = null
     ): PromiseInterface {
@@ -569,7 +570,7 @@ class Connection
         }
 
         if ($this->currentCommand === $command) {
-            $isKillable = \in_array($command->type,[
+            $isKillable = \in_array($command->type, [
                 CommandRequest::TYPE_QUERY,
                 CommandRequest::TYPE_STREAM_QUERY,
                 CommandRequest::TYPE_EXECUTE,
@@ -701,14 +702,14 @@ class Connection
      */
     private function awaitPendingKills(): PromiseInterface
     {
-        if ($this->pendingKills ===[]) {
+        if ($this->pendingKills === []) {
             // @phpstan-ignore-next-line
             return Promise::resolved(null);
         }
 
         return Promise::allSettled($this->pendingKills)
             ->then(function () {
-                $this->pendingKills =[];
+                $this->pendingKills = [];
             })
         ;
     }

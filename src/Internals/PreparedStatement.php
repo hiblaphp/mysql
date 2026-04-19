@@ -41,7 +41,8 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
         public readonly array $columnDefinitions = [],
         public readonly array $paramDefinitions = [],
         public readonly array $paramMap = []
-    ) {}
+    ) {
+    }
 
     /**
      * {@inheritdoc}
@@ -59,7 +60,7 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
         if ($this->paramMap !== []) {
             $mappedParams = [];
             foreach ($this->paramMap as $index => $name) {
-                if (!\array_key_exists($name, $params)) {
+                if (! \array_key_exists($name, $params)) {
                     throw new \InvalidArgumentException("Missing value for named parameter: :{$name}");
                 }
                 $mappedParams[$index] = $params[$name];
@@ -95,7 +96,7 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
         if ($this->paramMap !== []) {
             $mappedParams = [];
             foreach ($this->paramMap as $index => $name) {
-                if (!\array_key_exists($name, $params)) {
+                if (! \array_key_exists($name, $params)) {
                     throw new \InvalidArgumentException("Missing value for named parameter: :{$name}");
                 }
                 $mappedParams[$index] = $params[$name];

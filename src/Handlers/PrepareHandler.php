@@ -23,17 +23,17 @@ final class PrepareHandler
     /**
      * @var array<int, ColumnDefinition>
      */
-    private array $columnDefinitions =[];
+    private array $columnDefinitions = [];
 
     /**
      * @var array<int, ColumnDefinition>
      */
-    private array $paramDefinitions =[];
+    private array $paramDefinitions = [];
 
     /**
      * @var array<int, string>
      */
-    private array $paramMap =[];
+    private array $paramMap = [];
 
     /**
      * @var Promise<PreparedStatement>|null
@@ -67,7 +67,7 @@ final class PrepareHandler
         $this->currentPromise = $promise;
         $this->sequenceId = 0;
         $this->columnDefinitions = [];
-        $this->paramDefinitions =[];
+        $this->paramDefinitions = [];
         $this->paramMap = $paramMap;
 
         $packet = $this->commandBuilder->buildStmtPrepare($sql);

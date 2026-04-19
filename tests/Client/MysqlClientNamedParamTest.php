@@ -30,11 +30,12 @@ describe('MysqlClient Named Parameters', function (): void {
         $client = makeClient();
         $result = await($client->query('SELECT * FROM client_named_test WHERE role = :role AND active = :active', [
             'role' => 'admin',
-            'active' => 1
+            'active' => 1,
         ]));
 
         expect($result->rowCount)->toBe(1)
-            ->and($result->fetchOne()['role'])->toBe('admin');
+            ->and($result->fetchOne()['role'])->toBe('admin')
+        ;
 
         $client->close();
     });
@@ -42,7 +43,7 @@ describe('MysqlClient Named Parameters', function (): void {
     it('works with fetchOne()', function (): void {
         $client = makeClient();
         $row = await($client->fetchOne('SELECT * FROM client_named_test WHERE role = :role ORDER BY id ASC', [
-            'role' => 'user'
+            'role' => 'user',
         ]));
 
         expect($row['active'])->toBe(1);
@@ -53,7 +54,7 @@ describe('MysqlClient Named Parameters', function (): void {
     it('works with fetchValue()', function (): void {
         $client = makeClient();
         $count = await($client->fetchValue('SELECT COUNT(*) as c FROM client_named_test WHERE active = :state', 'c', [
-            'state' => 1
+            'state' => 1,
         ]));
 
         expect((int)$count)->toBe(2);
@@ -66,13 +67,13 @@ describe('MysqlClient Named Parameters', function (): void {
 
         $insertId = await($client->executeGetId('INSERT INTO client_named_test (role, active) VALUES (:role, :active)', [
             'role' => 'guest',
-            'active' => 0
+            'active' => 0,
         ]));
 
         expect($insertId)->toBeGreaterThan(3);
 
         $affected = await($client->execute('DELETE FROM client_named_test WHERE id = :id', [
-            'id' => $insertId
+            'id' => $insertId,
         ]));
 
         expect($affected)->toBe(1);
@@ -83,7 +84,7 @@ describe('MysqlClient Named Parameters', function (): void {
     it('works with stream()', function (): void {
         $client = makeClient();
         $stream = await($client->stream('SELECT id FROM client_named_test WHERE active = :active ORDER BY id', [
-            'active' => 1
+            'active' => 1,
         ]));
 
         $ids = [];
@@ -92,7 +93,8 @@ describe('MysqlClient Named Parameters', function (): void {
         }
 
         expect($ids)->toHaveCount(2)
-            ->and($ids)->toBe([1, 2]);
+            ->and($ids)->toBe([1, 2])
+        ;
 
         $client->close();
     });
@@ -106,12 +108,12 @@ describe('MysqlClient Named Parameters', function (): void {
 
             $affected = await($tx->execute('UPDATE client_named_test SET active = :active WHERE role = :role', [
                 'active' => 0,
-                'role' => 'admin'
+                'role' => 'admin',
             ]));
             expect($affected)->toBe(1);
 
-            throw new \RuntimeException('Trigger rollback');
-        })->catch(fn() => null));
+            throw new RuntimeException('Trigger rollback');
+        })->catch(fn () => null));
 
         $row = await($client->fetchOne('SELECT active FROM client_named_test WHERE id = 1'));
         expect((int)$row['active'])->toBe(1);
@@ -135,7 +137,7 @@ describe('MysqlClient Named Parameters', function (): void {
         $client = makeClient();
 
         expect(
-            fn() => await(
+            fn () => await(
                 $client->query('SELECT * FROM client_named_test WHERE role = :role', [])
             )
         )->toThrow(QueryException::class);

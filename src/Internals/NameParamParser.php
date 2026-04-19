@@ -139,7 +139,7 @@ final class NameParamParser
                         }
                         $result .= '?';
                         $paramMap[$paramIndex++] = $paramName; // @phpstan-ignore-next-line no-undefined-variables
-                        $position = $scanPosition - 1; 
+                        $position = $scanPosition - 1;
 
                         continue;
                     }

@@ -207,13 +207,15 @@ describe('NameParamParser', function (): void {
     });
 
     it('throws when mixing named after positional', function (): void {
-        expect(fn() => NameParamParser::parse('SELECT * FROM users WHERE id = ? AND name = :name'))
-            ->toThrow(\InvalidArgumentException::class, 'Cannot mix named and positional');
+        expect(fn () => NameParamParser::parse('SELECT * FROM users WHERE id = ? AND name = :name'))
+            ->toThrow(\InvalidArgumentException::class, 'Cannot mix named and positional')
+        ;
     });
 
     it('throws when mixing positional after named', function (): void {
-        expect(fn() => NameParamParser::parse('SELECT * FROM users WHERE name = :name AND id = ?'))
-            ->toThrow(\InvalidArgumentException::class, 'Cannot mix named and positional');
+        expect(fn () => NameParamParser::parse('SELECT * FROM users WHERE name = :name AND id = ?'))
+            ->toThrow(\InvalidArgumentException::class, 'Cannot mix named and positional')
+        ;
     });
 
     // -------------------------------------------------------------------------
@@ -332,14 +334,16 @@ describe('NameParamParser', function (): void {
         $query = 'SELECT * FROM t WHERE id IN (SELECT id FROM u WHERE role = :role) AND active = :active';
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe('SELECT * FROM t WHERE id IN (SELECT id FROM u WHERE role = ?) AND active = ?')
-            ->and($map)->toBe([0 => 'role', 1 => 'active']);
+            ->and($map)->toBe([0 => 'role', 1 => 'active'])
+        ;
     });
 
     it('handles named parameters inside a string-heavy query without false positives', function (): void {
         $query = "SELECT * FROM t WHERE label = 'hello:world' AND code = 'foo::bar' AND id = :id";
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe("SELECT * FROM t WHERE label = 'hello:world' AND code = 'foo::bar' AND id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     // -------------------------------------------------------------------------
@@ -351,126 +355,144 @@ describe('NameParamParser', function (): void {
         // safely as positional placeholders, not interpreted as SQL
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t WHERE id = :SELECT');
         expect($sql)->toBe('SELECT * FROM t WHERE id = ?')
-            ->and($map)->toBe([0 => 'SELECT']);
+            ->and($map)->toBe([0 => 'SELECT'])
+        ;
     });
 
     it('does not allow semicolons to break out of a parameter name', function (): void {
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t WHERE id = :id; DROP TABLE t--');
         expect($sql)->toBe('SELECT * FROM t WHERE id = ?; DROP TABLE t--')
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('does not allow a parameter name to contain a dash', function (): void {
         // :user-id should parse :user as the param and leave -id as literal SQL
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t WHERE id = :user-id');
         expect($sql)->toBe('SELECT * FROM t WHERE id = ?-id')
-            ->and($map)->toBe([0 => 'user']);
+            ->and($map)->toBe([0 => 'user'])
+        ;
     });
 
     it('does not allow a parameter name to contain a dot', function (): void {
         // :table.column is not a valid named param — stops at the dot
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t WHERE id = :table.column');
         expect($sql)->toBe('SELECT * FROM t WHERE id = ?.column')
-            ->and($map)->toBe([0 => 'table']);
+            ->and($map)->toBe([0 => 'table'])
+        ;
     });
 
     it('does not allow a parameter name to contain a space', function (): void {
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t WHERE id = :user id');
         expect($sql)->toBe('SELECT * FROM t WHERE id = ? id')
-            ->and($map)->toBe([0 => 'user']);
+            ->and($map)->toBe([0 => 'user'])
+        ;
     });
 
     it('does not allow a parameter name to contain a quote', function (): void {
         [$sql, $map] = NameParamParser::parse("SELECT * FROM t WHERE id = :user'injection");
         expect($sql)->toBe("SELECT * FROM t WHERE id = ?'injection")
-            ->and($map)->toBe([0 => 'user']);
+            ->and($map)->toBe([0 => 'user'])
+        ;
     });
 
     it('does not allow a parameter name to contain a slash', function (): void {
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t WHERE id = :user/name');
         expect($sql)->toBe('SELECT * FROM t WHERE id = ?/name')
-            ->and($map)->toBe([0 => 'user']);
+            ->and($map)->toBe([0 => 'user'])
+        ;
     });
 
     it('does not allow a parameter name to contain a null byte', function (): void {
         [$sql, $map] = NameParamParser::parse("SELECT * FROM t WHERE id = :user\x00injection");
         expect($sql)->toBe("SELECT * FROM t WHERE id = ?\x00injection")
-            ->and($map)->toBe([0 => 'user']);
+            ->and($map)->toBe([0 => 'user'])
+        ;
     });
 
     it('treats an injection attempt inside a string literal as inert', function (): void {
         $query = "SELECT * FROM t WHERE msg = 'x'' OR ''1''=''1' AND id = :id";
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe("SELECT * FROM t WHERE msg = 'x'' OR ''1''=''1' AND id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('treats a comment-based injection inside a string literal as inert', function (): void {
         $query = "SELECT * FROM t WHERE msg = 'hello -- :trap' AND id = :id";
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe("SELECT * FROM t WHERE msg = 'hello -- :trap' AND id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('treats a block comment injection inside a string literal as inert', function (): void {
         $query = "SELECT * FROM t WHERE msg = '/* :trap */' AND id = :id";
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe("SELECT * FROM t WHERE msg = '/* :trap */' AND id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('handles deeply nested subqueries with named parameters', function (): void {
         $query = 'SELECT * FROM t WHERE id IN (SELECT id FROM u WHERE id IN (SELECT id FROM v WHERE role = :role)) AND active = :active';
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe('SELECT * FROM t WHERE id IN (SELECT id FROM u WHERE id IN (SELECT id FROM v WHERE role = ?)) AND active = ?')
-            ->and($map)->toBe([0 => 'role', 1 => 'active']);
+            ->and($map)->toBe([0 => 'role', 1 => 'active'])
+        ;
     });
 
     it('handles a UNION with named parameters on both sides', function (): void {
         $query = 'SELECT id FROM t WHERE role = :role UNION SELECT id FROM u WHERE role = :role';
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe('SELECT id FROM t WHERE role = ? UNION SELECT id FROM u WHERE role = ?')
-            ->and($map)->toBe([0 => 'role', 1 => 'role']);
+            ->and($map)->toBe([0 => 'role', 1 => 'role'])
+        ;
     });
 
     it('handles a WITH (CTE) containing named parameters', function (): void {
         $query = 'WITH active AS (SELECT * FROM t WHERE status = :status) SELECT * FROM active WHERE id = :id';
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe('WITH active AS (SELECT * FROM t WHERE status = ?) SELECT * FROM active WHERE id = ?')
-            ->and($map)->toBe([0 => 'status', 1 => 'id']);
+            ->and($map)->toBe([0 => 'status', 1 => 'id'])
+        ;
     });
 
     it('handles a query with a very long string literal without false positives', function (): void {
         $longLiteral = str_repeat(':trap ', 1000);
-        $query       = "SELECT * FROM t WHERE msg = '{$longLiteral}' AND id = :id";
+        $query = "SELECT * FROM t WHERE msg = '{$longLiteral}' AND id = :id";
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe("SELECT * FROM t WHERE msg = '{$longLiteral}' AND id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('handles a query with a very long block comment without false positives', function (): void {
         $longComment = str_repeat(':trap ', 1000);
-        $query       = "SELECT * FROM t /* {$longComment} */ WHERE id = :id";
+        $query = "SELECT * FROM t /* {$longComment} */ WHERE id = :id";
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe("SELECT * FROM t /* {$longComment} */ WHERE id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('handles a very long named parameter name', function (): void {
         $longName = str_repeat('a', 500);
         [$sql, $map] = NameParamParser::parse("SELECT * FROM t WHERE id = :{$longName}");
         expect($sql)->toBe('SELECT * FROM t WHERE id = ?')
-            ->and($map)->toBe([0 => $longName]);
+            ->and($map)->toBe([0 => $longName])
+        ;
     });
 
     it('handles a large number of named parameters', function (): void {
-        $parts    = array_map(fn(int $n) => "col{$n} = :param{$n}", range(1, 200));
-        $query    = 'SELECT * FROM t WHERE ' . implode(' AND ', $parts);
+        $parts = array_map(fn (int $n) => "col{$n} = :param{$n}", range(1, 200));
+        $query = 'SELECT * FROM t WHERE ' . implode(' AND ', $parts);
         [$sql, $map] = NameParamParser::parse($query);
         expect(substr_count($sql, '?'))->toBe(200)
             ->and(count($map))->toBe(200)
             ->and($map[0])->toBe('param1')
-            ->and($map[199])->toBe('param200');
+            ->and($map[199])->toBe('param200')
+        ;
     });
 
     it('returns the same result when called twice on the same input (no side effects)', function (): void {
@@ -478,57 +500,66 @@ describe('NameParamParser', function (): void {
         [$sql1, $map1] = NameParamParser::parse($query);
         [$sql2, $map2] = NameParamParser::parse($query);
         expect($sql1)->toBe($sql2)
-            ->and($map1)->toBe($map2);
+            ->and($map1)->toBe($map2)
+        ;
     });
 
     it('handles an unterminated single-quoted string gracefully', function (): void {
         [$sql, $map] = NameParamParser::parse("SELECT * FROM t WHERE msg = 'unterminated :trap");
         expect($sql)->toBe("SELECT * FROM t WHERE msg = 'unterminated :trap")
-            ->and($map)->toBe([]);
+            ->and($map)->toBe([])
+        ;
     });
 
     it('handles an unterminated double-quoted string gracefully', function (): void {
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t WHERE msg = "unterminated :trap');
         expect($sql)->toBe('SELECT * FROM t WHERE msg = "unterminated :trap')
-            ->and($map)->toBe([]);
+            ->and($map)->toBe([])
+        ;
     });
 
     it('handles an unterminated backtick identifier gracefully', function (): void {
         [$sql, $map] = NameParamParser::parse('SELECT `unterminated:trap FROM t');
         expect($sql)->toBe('SELECT `unterminated:trap FROM t')
-            ->and($map)->toBe([]);
+            ->and($map)->toBe([])
+        ;
     });
 
     it('handles an unterminated block comment gracefully', function (): void {
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t /' . '* unterminated :trap');
         expect($sql)->toBe('SELECT * FROM t /' . '* unterminated :trap')
-            ->and($map)->toBe([]);
+            ->and($map)->toBe([])
+        ;
     });
 
     it('handles a query that is only an unterminated string', function (): void {
         [$sql, $map] = NameParamParser::parse("'");
         expect($sql)->toBe("'")
-            ->and($map)->toBe([]);
+            ->and($map)->toBe([])
+        ;
     });
 
     it('handles a query that is only an unterminated block comment', function (): void {
         [$sql, $map] = NameParamParser::parse('/*');
         expect($sql)->toBe('/*')
-            ->and($map)->toBe([]);
+            ->and($map)->toBe([])
+        ;
     });
 
     it('exits a line comment on Windows-style CRLF line endings', function (): void {
         $query = "SELECT * FROM t -- :trap\r\nWHERE id = :id";
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe("SELECT * FROM t -- :trap\r\nWHERE id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('exits a hash comment on Windows-style CRLF line endings', function (): void {
         $query = "SELECT * FROM t # :trap\r\nWHERE id = :id";
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe("SELECT * FROM t # :trap\r\nWHERE id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('handles a line comment terminated only by CR without LF', function (): void {
@@ -541,14 +572,16 @@ describe('NameParamParser', function (): void {
         $query = "SELECT * FROM t WHERE name = 'こんにちは :trap' AND id = :id";
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe("SELECT * FROM t WHERE name = 'こんにちは :trap' AND id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('handles a named parameter immediately after a multibyte character', function (): void {
         $query = 'SELECT * FROM t WHERE id = :id AND emoji = :emoji';
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe('SELECT * FROM t WHERE id = ? AND emoji = ?')
-            ->and($map)->toBe([0 => 'id', 1 => 'emoji']);
+            ->and($map)->toBe([0 => 'id', 1 => 'emoji'])
+        ;
     });
 
     it('does not treat a high-byte character immediately after a colon as a valid identifier start', function (): void {
@@ -561,62 +594,72 @@ describe('NameParamParser', function (): void {
     it('handles a query that is only a named parameter', function (): void {
         [$sql, $map] = NameParamParser::parse(':id');
         expect($sql)->toBe('?')
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('handles a query that is only a positional placeholder', function (): void {
         [$sql, $map] = NameParamParser::parse('?');
         expect($sql)->toBe('?')
-            ->and($map)->toBe([]);
+            ->and($map)->toBe([])
+        ;
     });
 
     it('handles a query that is only a bare colon', function (): void {
         [$sql, $map] = NameParamParser::parse(':');
         expect($sql)->toBe(':')
-            ->and($map)->toBe([]);
+            ->and($map)->toBe([])
+        ;
     });
 
     it('handles a parameter name of a single character', function (): void {
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t WHERE id = :i');
         expect($sql)->toBe('SELECT * FROM t WHERE id = ?')
-            ->and($map)->toBe([0 => 'i']);
+            ->and($map)->toBe([0 => 'i'])
+        ;
     });
 
     it('handles a parameter name that is only underscores', function (): void {
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t WHERE id = :___');
         expect($sql)->toBe('SELECT * FROM t WHERE id = ?')
-            ->and($map)->toBe([0 => '___']);
+            ->and($map)->toBe([0 => '___'])
+        ;
     });
 
     it('handles an escaped backslash at the end of a string literal', function (): void {
         [$sql, $map] = NameParamParser::parse("SELECT * FROM t WHERE path = '\\\\' AND id = :id");
         expect($sql)->toBe("SELECT * FROM t WHERE path = '\\\\' AND id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('handles an empty string literal', function (): void {
         [$sql, $map] = NameParamParser::parse("SELECT * FROM t WHERE name = '' AND id = :id");
         expect($sql)->toBe("SELECT * FROM t WHERE name = '' AND id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('handles an empty block comment', function (): void {
         [$sql, $map] = NameParamParser::parse('SELECT ' . '/**/' . ' :id FROM t');
         expect($sql)->toBe('SELECT ' . '/**/' . ' ? FROM t')
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('handles a named parameter immediately after a -- opener with no space', function (): void {
         $query = "SELECT * FROM t --:trap\nWHERE id = :id";
         [$sql, $map] = NameParamParser::parse($query);
         expect($sql)->toBe("SELECT * FROM t --:trap\nWHERE id = ?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 
     it('handles multiple assignment operators alongside named parameters', function (): void {
         [$sql, $map] = NameParamParser::parse('SET @a := :val1, @b := :val2');
         expect($sql)->toBe('SET @a := ?, @b := ?')
-            ->and($map)->toBe([0 => 'val1', 1 => 'val2']);
+            ->and($map)->toBe([0 => 'val1', 1 => 'val2'])
+        ;
     });
 
     it('handles a whitespace-only query', function (): void {
