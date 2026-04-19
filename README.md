@@ -25,7 +25,7 @@
 | Server-side query cancellation | Supported | Opt-in `KILL QUERY` via side-channel TCP connection |
 | Health checks | Supported | `healthCheck()` pings idle connections; evicts stale ones |
 | Pool stats | Supported | `$client->stats` for live pool introspection |
-| MariaDB compatibility | Supported | Core protocol fully compatible; some MariaDB-only extensions may not work — see [MariaDB compatibility](#mariadb-compatibility) |
+| MariaDB compatibility | Supported | Core protocol fully compatible; some MariaDB-only extensions may not work, see [MariaDB compatibility](#mariadb-compatibility) |
 | `hiblaphp/sql` contracts | Supported | Fully implements `SqlClientInterface`; drivers are swappable |
 | `LOAD DATA LOCAL INFILE` | Planned | Not yet implemented; throws `QueryException` if attempted |
 
@@ -260,7 +260,7 @@ $client = new MysqlClient(
 | `$maxLifetime` | `int` | `3600` | Maximum seconds a connection may live before it is rotated out, regardless of whether it is idle or active. Helps prevent issues with long-lived connections accumulating server-side state. |
 | `$statementCacheSize` | `int` | `256` | Maximum number of prepared statements to cache per connection (LRU eviction). Only relevant when `$enableStatementCache` is `true`. |
 | `$enableStatementCache` | `bool` | `true` | Whether to cache prepared statements per connection. When enabled, `query($sql, $params)` reuses existing server-side statement handles instead of issuing a new `COM_STMT_PREPARE` on every call. Disable only if you are managing statement lifecycles entirely through explicit `prepare()` calls. |
-| `$maxWaiters` | `int` | `0` | Maximum number of callers that may queue waiting for a free connection before a `PoolException` is thrown immediately. `0` means unlimited — callers will always queue and wait up to `$acquireTimeout`. Set a non-zero value to shed load fast under pressure rather than letting the wait queue grow unbounded. |
+| `$maxWaiters` | `int` | `0` | Maximum number of callers that may queue waiting for a free connection before a `PoolException` is thrown immediately. `0` means unlimited and callers will always queue and wait up to `$acquireTimeout`. Set a non-zero value to shed load fast under pressure rather than letting the wait queue grow unbounded. |
 | `$acquireTimeout` | `float` | `10.0` | Maximum seconds to wait for a free connection before throwing a `PoolException`. Applies per-query when the pool is at capacity. |
 | `$enableServerSideCancellation` | `bool\|null` | `null` | Controls whether cancelling a query promise dispatches `KILL QUERY` to the server. `true` enables it, `false` disables it, `null` defers to the value in `$config`. When `null` and `$config` does not specify it, server-side cancellation is disabled. See [Query cancellation](#query-cancellation). |
 | `$resetConnection` | `bool\|null` | `null` | Controls whether `COM_RESET_CONNECTION` is sent when a connection is returned to the pool. `true` enables it, `false` disables it, `null` defers to the value in `$config`. Wiping session state on return prevents one caller's session variables from leaking into the next. Note that this also clears all server-side prepared statement handles — the statement cache is cleared automatically on the next borrow. See [Statement caching](#statement-caching). |
