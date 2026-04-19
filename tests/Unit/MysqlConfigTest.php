@@ -19,15 +19,18 @@ describe('MysqlConfig', function (): void {
             ->and($config->charset)->toBe('utf8mb4')
             ->and($config->ssl)->toBeFalse()
             ->and($config->enableServerSideCancellation)->toBeFalse()
-            ->and($config->multiStatements)->toBeFalse();
+            ->and($config->multiStatements)->toBeFalse()
+        ;
     });
 
     it('throws exception if killTimeoutSeconds is zero or negative', function (): void {
-        expect(fn() => new MysqlConfig(host: 'localhost', killTimeoutSeconds: 0))
-            ->toThrow(\InvalidArgumentException::class, 'killTimeoutSeconds must be greater than zero');
+        expect(fn () => new MysqlConfig(host: 'localhost', killTimeoutSeconds: 0))
+            ->toThrow(\InvalidArgumentException::class, 'killTimeoutSeconds must be greater than zero')
+        ;
 
-        expect(fn() => new MysqlConfig(host: 'localhost', killTimeoutSeconds: -1.5))
-            ->toThrow(\InvalidArgumentException::class, 'killTimeoutSeconds must be greater than zero');
+        expect(fn () => new MysqlConfig(host: 'localhost', killTimeoutSeconds: -1.5))
+            ->toThrow(\InvalidArgumentException::class, 'killTimeoutSeconds must be greater than zero')
+        ;
     });
 
     describe('fromArray', function (): void {
@@ -54,12 +57,14 @@ describe('MysqlConfig', function (): void {
                 ->and($config->ssl)->toBeTrue()
                 ->and($config->compress)->toBeTrue()
                 ->and($config->resetConnection)->toBeTrue()
-                ->and($config->multiStatements)->toBeTrue();
+                ->and($config->multiStatements)->toBeTrue()
+            ;
         });
 
         it('throws exception if host is missing in array', function (): void {
-            expect(fn() => MysqlConfig::fromArray(['port' => 3306]))
-                ->toThrow(\InvalidArgumentException::class, 'Host is required');
+            expect(fn () => MysqlConfig::fromArray(['port' => 3306]))
+                ->toThrow(\InvalidArgumentException::class, 'Host is required')
+            ;
         });
 
         it('casts array values to correct types', function (): void {
@@ -72,7 +77,8 @@ describe('MysqlConfig', function (): void {
 
             expect($config->port)->toBe(3308)
                 ->and($config->ssl)->toBeTrue()
-                ->and($config->connectTimeout)->toBe(15);
+                ->and($config->connectTimeout)->toBe(15)
+            ;
         });
     });
 
@@ -88,13 +94,15 @@ describe('MysqlConfig', function (): void {
                 ->and($config->database)->toBe('my_database')
                 ->and($config->charset)->toBe('latin1')
                 ->and($config->ssl)->toBeTrue()
-                ->and($config->compress)->toBeTrue();
+                ->and($config->compress)->toBeTrue()
+            ;
         });
 
         it('automatically prepends mysql:// scheme if missing', function (): void {
             $config = MysqlConfig::fromUri('localhost/mydb');
             expect($config->host)->toBe('localhost')
-                ->and($config->database)->toBe('mydb');
+                ->and($config->database)->toBe('mydb')
+            ;
         });
 
         it('handles URL encoded characters in user and password', function (): void {
@@ -102,12 +110,14 @@ describe('MysqlConfig', function (): void {
             $config = MysqlConfig::fromUri($uri);
 
             expect($config->username)->toBe('admin:1')
-                ->and($config->password)->toBe('p@ssw#rd');
+                ->and($config->password)->toBe('p@ssw#rd')
+            ;
         });
 
         it('throws exception for invalid URI scheme', function (): void {
-            expect(fn() => MysqlConfig::fromUri('postgres://localhost'))
-                ->toThrow(\InvalidArgumentException::class, 'Invalid URI scheme "postgres", expected "mysql"');
+            expect(fn () => MysqlConfig::fromUri('postgres://localhost'))
+                ->toThrow(\InvalidArgumentException::class, 'Invalid URI scheme "postgres", expected "mysql"')
+            ;
         });
 
         it('correctly parses boolean query parameters', function (): void {
@@ -116,24 +126,28 @@ describe('MysqlConfig', function (): void {
 
             expect($config->resetConnection)->toBeTrue()
                 ->and($config->multiStatements)->toBeFalse()
-                ->and($config->enableServerSideCancellation)->toBeFalse();
+                ->and($config->enableServerSideCancellation)->toBeFalse()
+            ;
         });
     });
 
     describe('Helpers and Logic', function (): void {
         it('correctly reports hasPassword', function (): void {
             expect((new MysqlConfig('host'))->hasPassword())->toBeFalse()
-                ->and((new MysqlConfig('host', password: 'abc'))->hasPassword())->toBeTrue();
+                ->and((new MysqlConfig('host', password: 'abc'))->hasPassword())->toBeTrue()
+            ;
         });
 
         it('correctly reports hasDatabase', function (): void {
             expect((new MysqlConfig('host'))->hasDatabase())->toBeFalse()
-                ->and((new MysqlConfig('host', database: 'db'))->hasDatabase())->toBeTrue();
+                ->and((new MysqlConfig('host', database: 'db'))->hasDatabase())->toBeTrue()
+            ;
         });
 
         it('correctly reports useSsl', function (): void {
             expect((new MysqlConfig('host'))->useSsl())->toBeFalse()
-                ->and((new MysqlConfig('host', ssl: true))->useSsl())->toBeTrue();
+                ->and((new MysqlConfig('host', ssl: true))->useSsl())->toBeTrue()
+            ;
         });
 
         it('creates a new instance with withQueryCancellation', function (): void {
@@ -142,7 +156,8 @@ describe('MysqlConfig', function (): void {
 
             expect($config->enableServerSideCancellation)->toBeFalse()
                 ->and($newConfig->enableServerSideCancellation)->toBeTrue()
-                ->and($newConfig)->not->toBe($config); 
+                ->and($newConfig)->not->toBe($config)
+            ;
         });
 
         it('sanitizes the password in toSafeUri', function (): void {
@@ -158,7 +173,8 @@ describe('MysqlConfig', function (): void {
 
             expect($safeUri)->not->toContain('***')
                 ->and($safeUri)->not->toContain('super-secret-password')
-                ->and($safeUri)->toBe('mysql://10.0.0.1/production');
+                ->and($safeUri)->toBe('mysql://10.0.0.1/production')
+            ;
 
             $configCustom = new MysqlConfig(
                 host: 'localhost',

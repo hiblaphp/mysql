@@ -90,7 +90,7 @@ describe('RowStream', function (): void {
     });
 
     it('cancels the command queue promise when an in-flight stream is cancelled', function (): void {
-        $stream         = new RowStream();
+        $stream = new RowStream();
         $commandPromise = new Promise();
         $stream->commandQueuePromise = $commandPromise;
 
@@ -111,12 +111,12 @@ describe('RowStream', function (): void {
         $stream->push(['id' => 2]);
         expect($paused)->toBeFalse();
 
-        $stream->push(['id' => 3]); 
+        $stream->push(['id' => 3]);
         expect($paused)->toBeTrue();
     });
 
     it('triggers resume backpressure when iterating drains buffer below threshold', function (): void {
-        $stream  = new RowStream(bufferSize: 4);
+        $stream = new RowStream(bufferSize: 4);
         $resumed = false;
 
         $stream->backpressureHandler = function (bool $pause) use (&$resumed): void {

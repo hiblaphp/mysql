@@ -53,7 +53,7 @@ describe('Pool Scaling and Capacity', function (): void {
     it('does not exceed maxSize under heavy concurrent burst', function (): void {
         $pool = new PoolManager(testMysqlConfig(), maxSize: 5, minSize: 1);
 
-        $promises =[];
+        $promises = [];
         for ($i = 0; $i < 20; $i++) {
             $promises[] = $pool->get();
         }
@@ -63,7 +63,7 @@ describe('Pool Scaling and Capacity', function (): void {
         expect($pool->stats['active_connections'])->toBe(5);
         expect($pool->stats['waiting_requests'])->toBe(15);
 
-        $conns =[];
+        $conns = [];
         foreach ($promises as $p) {
             if (! $p->isPending()) {
                 $c = await($p);
@@ -102,7 +102,7 @@ describe('Pool Scaling and Capacity', function (): void {
         $w1 = $pool->get();
         $w2 = $pool->get();
 
-        $order =[];
+        $order = [];
         $w1->then(function () use (&$order) {
             $order[] = 1;
         });
@@ -264,7 +264,8 @@ describe('Pool Scaling and Capacity', function (): void {
 
         $p2 = $client->query('SELECT 2');
 
-        expect($client->stats['waiting_requests'])->toBe(1);[$v1, $v2] = await(Promise::all([$p1, $p2]));
+        expect($client->stats['waiting_requests'])->toBe(1);
+        [$v1, $v2] = await(Promise::all([$p1, $p2]));
         expect($v1)->toBe('1');
 
         $client->close();
@@ -273,7 +274,6 @@ describe('Pool Scaling and Capacity', function (): void {
     it('respects acquireTimeout when pool is full', function (): void {
         $client = makeTimeoutClient(maxConnections: 1, acquireTimeout: 0.2);
 
-        // Increased to 5 to protect against CI lag, explicitly cancelled below so we don't wait 5s
         $p1 = $client->query('SELECT SLEEP(5)');
 
         $start = microtime(true);
@@ -287,36 +287,46 @@ describe('Pool Scaling and Capacity', function (): void {
         }
 
         $p1->cancel();
-        try { await($p1); } catch (Throwable $e) {}
-        
+
+        try {
+            await($p1);
+        } catch (Throwable $e) {
+        }
+
         $client->close();
     });
 
     it('rejects with PoolException when maxWaiters is exceeded', function (): void {
         $client = makeWaiterClient(maxConnections: 1, maxWaiters: 1);
 
-        // Increased to 5 to ensure connection is held in slow CI env
         $p1 = $client->query('SELECT SLEEP(5)');
         $p2 = $client->query('SELECT 1');
 
-        expect(fn() => await($client->query('SELECT 1')))
-            ->toThrow(PoolException::class);
+        expect(fn () => await($client->query('SELECT 1')))
+            ->toThrow(PoolException::class)
+        ;
 
         $p1->cancel();
         $p2->cancel();
-        try { await($p1); } catch (Throwable $e) {}
-        try { await($p2); } catch (Throwable $e) {}
-        
+
+        try {
+            await($p1);
+        } catch (Throwable $e) {
+        }
+
+        try {
+            await($p2);
+        } catch (Throwable $e) {
+        }
+
         $client->close();
     });
 
     it('cleans up properly on closeAsync with active and draining connections', function (): void {
         $client = makeClient(maxConnections: 2, enableServerSideCancellation: true);
 
-        // Finishes naturally (~0.5s max wait)
         $p1 = $client->query('SELECT SLEEP(0.5)');
 
-        // Artificially long, cancelled immediately to test drain
         $p2 = $client->query('SELECT SLEEP(5)');
         await(delay(0.1));
         $p2->cancel();
@@ -327,14 +337,13 @@ describe('Pool Scaling and Capacity', function (): void {
 
         await($shutdownPromise);
 
-        // Once graceful shutdown completes, the pool is destroyed and nulled entirely
-        expect(fn() => $client->stats)->toThrow(Hibla\Mysql\Exceptions\NotInitializedException::class);
+        expect(fn () => $client->stats)->toThrow(Hibla\Mysql\Exceptions\NotInitializedException::class);
     });
 
     it('scales up and down during high concurrent SP multiplexing', function (): void {
         $client = makeClient(minConnections: 0, maxConnections: 10);
 
-        $promises =[];
+        $promises = [];
         for ($i = 0; $i < 30; $i++) {
             $promises[] = $client->query('SELECT 1');
         }
@@ -408,7 +417,7 @@ describe('Pool Scaling and Capacity', function (): void {
 
         try {
             await($p);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
         }
 
         expect($client->stats['draining_connections'])->toBe(1);
@@ -427,7 +436,7 @@ describe('Pool Scaling and Capacity', function (): void {
     it('multiplexes concurrent SP calls accurately across scaled connections', function (): void {
         $client = makeClient(minConnections: 2, maxConnections: 5);
 
-        $promises =[];
+        $promises = [];
         for ($i = 0; $i < 5; $i++) {
             $promises[] = $client->query('SELECT 1');
         }

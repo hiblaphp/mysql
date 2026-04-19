@@ -16,7 +16,7 @@ describe('PreparedStatement', function (): void {
 
     it('validates parameter count on execute', function (): void {
         $conn = Mockery::mock(Connection::class);
-     
+
         $conn->shouldReceive('closeStatement')->andReturn(Promise::resolved())->byDefault();
 
         $stmt = new PreparedStatement($conn, id: 1, numColumns: 0, numParams: 2);
@@ -44,7 +44,7 @@ describe('PreparedStatement', function (): void {
         $stmt = new PreparedStatement($conn, id: 1, numColumns: 0, numParams: 3);
 
         $promise = new Promise();
-        
+
         $conn->shouldReceive('executeStatement')
              ->once()
              ->with($stmt, [1, 0, 'test'])
@@ -62,7 +62,7 @@ describe('PreparedStatement', function (): void {
         $stmt = new PreparedStatement($conn, id: 1, numColumns: 0, numParams: 1);
 
         $promise = new Promise();
-        
+
         $conn->shouldReceive('executeStream')
              ->once()
              ->with($stmt, ['value'], Mockery::type(StreamContext::class))
@@ -107,7 +107,7 @@ describe('PreparedStatement', function (): void {
 
     it('automatically closes on destruction', function (): void {
         $conn = Mockery::mock(Connection::class);
-        
+
         $conn->shouldReceive('closeStatement')
              ->once()
              ->with(456)
@@ -115,7 +115,7 @@ describe('PreparedStatement', function (): void {
         ;
 
         $stmt = new PreparedStatement($conn, id: 456, numColumns: 0, numParams: 0);
-        
+
         unset($stmt);
 
         expect(true)->toBeTrue();

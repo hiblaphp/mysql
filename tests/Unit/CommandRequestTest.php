@@ -29,7 +29,8 @@ describe('CommandRequest', function (): void {
             ->and($request->sql)->toBe('SELECT * FROM users WHERE id = ?')
             ->and($request->params)->toBe($params)
             ->and($request->statementId)->toBe(42)
-            ->and($request->context)->toBe($context);
+            ->and($request->context)->toBe($context)
+        ;
     });
 
     it('applies correct default values for optional parameters', function (): void {
@@ -42,7 +43,8 @@ describe('CommandRequest', function (): void {
         expect($request->sql)->toBe('')
             ->and($request->params)->toBe([])
             ->and($request->statementId)->toBe(0)
-            ->and($request->context)->toBeNull();
+            ->and($request->context)->toBeNull()
+        ;
     });
 
     it('has all required type constants defined correctly', function (): void {
@@ -53,12 +55,13 @@ describe('CommandRequest', function (): void {
             ->and(CommandRequest::TYPE_CLOSE_STMT)->toBe('close_stmt')
             ->and(CommandRequest::TYPE_STREAM_QUERY)->toBe('stream_query')
             ->and(CommandRequest::TYPE_EXECUTE_STREAM)->toBe('execute_stream')
-            ->and(CommandRequest::TYPE_RESET)->toBe('reset');
+            ->and(CommandRequest::TYPE_RESET)->toBe('reset')
+        ;
     });
 
     it('stores context of any type', function (): void {
         $promise = new Promise();
-        
+
         $req1 = new CommandRequest('type', $promise, context: ['a' => 1]);
         expect($req1->context)->toBe(['a' => 1]);
 

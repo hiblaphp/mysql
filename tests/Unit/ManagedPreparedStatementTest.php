@@ -17,8 +17,8 @@ describe('ManagedPreparedStatement', function (): void {
 
     it('delegates execute() to the underlying statement', function (): void {
         $inner = Mockery::mock(PreparedStatementInterface::class);
-        $conn  = Mockery::mock(Connection::class);
-        $pool  = Mockery::mock(PoolManager::class);
+        $conn = Mockery::mock(Connection::class);
+        $pool = Mockery::mock(PoolManager::class);
 
         $conn->shouldReceive('isClosed')->andReturn(false)->byDefault();
         $conn->shouldReceive('close')->byDefault();
@@ -35,8 +35,8 @@ describe('ManagedPreparedStatement', function (): void {
 
     it('delegates executeStream() to the underlying statement', function (): void {
         $inner = Mockery::mock(PreparedStatementInterface::class);
-        $conn  = Mockery::mock(Connection::class);
-        $pool  = Mockery::mock(PoolManager::class);
+        $conn = Mockery::mock(Connection::class);
+        $pool = Mockery::mock(PoolManager::class);
 
         $conn->shouldReceive('isClosed')->andReturn(false)->byDefault();
         $conn->shouldReceive('close')->byDefault();
@@ -53,12 +53,12 @@ describe('ManagedPreparedStatement', function (): void {
 
     it('releases the connection back to the pool after close() settles', function (): void {
         $inner = Mockery::mock(PreparedStatementInterface::class);
-        $conn  = Mockery::mock(Connection::class);
-        $pool  = Mockery::mock(PoolManager::class);
+        $conn = Mockery::mock(Connection::class);
+        $pool = Mockery::mock(PoolManager::class);
 
         $conn->shouldReceive('isClosed')->andReturn(true)->byDefault();
         $inner->shouldReceive('close')->once()->andReturn(Promise::resolved());
-    
+
         $pool->shouldReceive('release')->once()->with($conn);
 
         $managed = new ManagedPreparedStatement($inner, $conn, $pool);
@@ -69,26 +69,26 @@ describe('ManagedPreparedStatement', function (): void {
 
     it('does not release the connection twice when close() is followed by destruction', function (): void {
         $inner = Mockery::mock(PreparedStatementInterface::class);
-        $conn  = Mockery::mock(Connection::class);
-        $pool  = Mockery::mock(PoolManager::class);
+        $conn = Mockery::mock(Connection::class);
+        $pool = Mockery::mock(PoolManager::class);
 
         $conn->shouldReceive('isClosed')->andReturn(true)->byDefault();
         $inner->shouldReceive('close')->once()->andReturn(Promise::resolved());
-        
+
         $pool->shouldReceive('release')->once()->with($conn);
 
         $managed = new ManagedPreparedStatement($inner, $conn, $pool);
 
         await($managed->close());
-        unset($managed); 
+        unset($managed);
 
         expect(true)->toBeTrue();
     });
 
     it('closes the underlying connection and releases the pool on destruction when not yet released', function (): void {
         $inner = Mockery::mock(PreparedStatementInterface::class);
-        $conn  = Mockery::mock(Connection::class);
-        $pool  = Mockery::mock(PoolManager::class);
+        $conn = Mockery::mock(Connection::class);
+        $pool = Mockery::mock(PoolManager::class);
 
         $conn->shouldReceive('isClosed')->andReturn(false);
         $conn->shouldReceive('close')->once();
@@ -103,8 +103,8 @@ describe('ManagedPreparedStatement', function (): void {
 
     it('skips closing the connection on destruction when it is already closed', function (): void {
         $inner = Mockery::mock(PreparedStatementInterface::class);
-        $conn  = Mockery::mock(Connection::class);
-        $pool  = Mockery::mock(PoolManager::class);
+        $conn = Mockery::mock(Connection::class);
+        $pool = Mockery::mock(PoolManager::class);
 
         $conn->shouldReceive('isClosed')->andReturn(true);
         $conn->shouldNotReceive('close');

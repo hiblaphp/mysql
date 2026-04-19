@@ -21,7 +21,8 @@ describe('StreamStats', function (): void {
             ->and($stats->columnCount)->toBe(5)
             ->and($stats->duration)->toBe(2.5)
             ->and($stats->warningCount)->toBe(1)
-            ->and($stats->connectionId)->toBe(123);
+            ->and($stats->connectionId)->toBe(123)
+        ;
     });
 
     it('calculates rowsPerSecond correctly', function (): void {
@@ -48,6 +49,7 @@ describe('StreamStats', function (): void {
         $stats = new StreamStats(100, 2, 0.5);
 
         expect($stats->warningCount)->toBe(0)
-            ->and($stats->connectionId)->toBe(0);
+            ->and($stats->connectionId)->toBe(0)
+        ;
     });
 });

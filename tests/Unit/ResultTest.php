@@ -109,7 +109,7 @@ describe('Result', function (): void {
     it('links and traverses multiple result sets', function (): void {
         $result1 = new Result(rows: [['id' => 1]]);
         $result2 = new Result(rows: [['id' => 2]]);
-        
+
         $result1->setNextResult($result2);
 
         expect($result1->nextResult())->toBe($result2)

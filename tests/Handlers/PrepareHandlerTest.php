@@ -34,7 +34,8 @@ describe('PrepareHandler', function () {
         $handler = new PrepareHandler($connection, $commandBuilder);
         $promise = new Promise();
 
-        $handler->start('SELECT * FROM users WHERE id = ?', $promise);
+        // Pass empty array for $paramMap
+        $handler->start('SELECT * FROM users WHERE id = ?', [], $promise);
 
         expect(true)->toBeTrue();
     });
@@ -47,7 +48,8 @@ describe('PrepareHandler', function () {
         $handler = new PrepareHandler($connection, $commandBuilder);
         $promise = new Promise();
 
-        $handler->start('SELECT * FROM invalid_table', $promise);
+        // Pass empty array for $paramMap
+        $handler->start('SELECT * FROM invalid_table', [], $promise);
 
         $payloadReader = Mockery::mock(PayloadReader::class);
         $payloadReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0xFF);
@@ -85,7 +87,8 @@ describe('PrepareHandler', function () {
         $handler = new PrepareHandler($connection, $commandBuilder);
         $promise = new Promise();
 
-        $handler->start('SET @var = 1', $promise);
+        // Pass empty array for $paramMap
+        $handler->start('SET @var = 1', [], $promise);
 
         $payloadReader = Mockery::mock(PayloadReader::class);
         $payloadReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x00);
@@ -124,7 +127,8 @@ describe('PrepareHandler', function () {
         $handler = new PrepareHandler($connection, $commandBuilder);
         $promise = new Promise();
 
-        $handler->start('INSERT INTO users (name) VALUES (?)', $promise);
+        // Pass empty array for $paramMap
+        $handler->start('INSERT INTO users (name) VALUES (?)', [], $promise);
 
         $headerReader = Mockery::mock(PayloadReader::class);
         $headerReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x00);
@@ -182,7 +186,8 @@ describe('PrepareHandler', function () {
         $handler = new PrepareHandler($connection, $commandBuilder);
         $promise = new Promise();
 
-        $handler->start('SELECT id, name FROM users', $promise);
+        // Pass empty array for $paramMap
+        $handler->start('SELECT id, name FROM users', [], $promise);
 
         $headerReader = Mockery::mock(PayloadReader::class);
         $headerReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x00);
@@ -252,7 +257,8 @@ describe('PrepareHandler', function () {
         $handler = new PrepareHandler($connection, $commandBuilder);
         $promise = new Promise();
 
-        $handler->start('SELECT id, name FROM users WHERE id = ?', $promise);
+        // Pass mapping array for $paramMap to fully verify paramMap passthrough
+        $handler->start('SELECT id, name FROM users WHERE id = ?', [0 => 'id'], $promise);
 
         $headerReader = Mockery::mock(PayloadReader::class);
         $headerReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x00);
@@ -330,6 +336,7 @@ describe('PrepareHandler', function () {
             ->and($stmt->id)->toBe(126)
             ->and($stmt->numParams)->toBe(1)
             ->and($stmt->numColumns)->toBe(2)
+            ->and($stmt->paramMap)->toBe([0 => 'id'])
             ->and($result6)->toBeTrue()
         ;
     });
@@ -342,7 +349,7 @@ describe('PrepareHandler', function () {
         $handler = new PrepareHandler($connection, $commandBuilder);
         $promise = new Promise();
 
-        $handler->start('SELECT 1', $promise);
+        $handler->start('SELECT 1', [], $promise);
 
         $payloadReader = Mockery::mock(PayloadReader::class);
         $payloadReader->shouldReceive('readFixedInteger')->with(1)->andReturn(0x01); // Not 0x00 (OK) or 0xFF (ERR)
