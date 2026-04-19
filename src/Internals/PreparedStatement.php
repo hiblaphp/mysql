@@ -177,7 +177,7 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
     /**
      * Normalize parameters (convert booleans to integers and strip keys).
      *
-     * @param array<int, mixed> $params
+     * @param array<int|string, mixed> $params
      *
      * @return array<int, mixed>
      */

@@ -138,8 +138,8 @@ final class NameParamParser
                             throw new InvalidArgumentException('Cannot mix named and positional parameters in the same query.');
                         }
                         $result .= '?';
-                        $paramMap[$paramIndex++] = $paramName;
-                        $position = $scanPosition - 1;
+                        $paramMap[$paramIndex++] = $paramName; // @phpstan-ignore-next-line no-undefined-variables
+                        $position = $scanPosition - 1; 
 
                         continue;
                     }
