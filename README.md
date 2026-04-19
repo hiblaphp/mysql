@@ -1,8 +1,7 @@
 # Hibla MySQL Client
-**A modern, async-first, high-performance MySQL client for PHP with robust connection pooling, prepared statements, streaming, and full transaction support.**
+**A modern, async-first, high-performance MySQL client for PHP with robust connection pooling, prepared statements, streaming, and full transaction support written in Pure PHP.**
 
 [![Latest Release](https://img.shields.io/github/release/hiblaphp/mysql.svg?style=flat-square)](https://github.com/hiblaphp/mysql/releases)
-[![Tests](https://github.com/hiblaphp/mysql/actions/workflows/test.yml/badge.svg)](https://github.com/hiblaphp/mysql/actions/workflows/test.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/hiblaphp/mysql.svg?style=flat-square)](https://packagist.org/packages/hiblaphp/mysql)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](./LICENSE)
 
@@ -13,14 +12,12 @@
 | Feature | Status | Notes |
 |---|---|---|
 | Lazy connection pooling | Supported | No TCP connections opened until the first query |
-| Async/await execution | Supported | All operations return `PromiseInterface`; `await()` safe everywhere |
 | Parameterized queries | Supported | Binary protocol via prepared statements; SQL-injection safe |
+| Named parameters (`:name`) | Supported | Parsed into positional `?` at the client; works with `query()`, `prepare()`, and all transaction methods |
 | Prepared statements | Supported | Explicit lifecycle control with `prepare()` / `close()` |
 | Statement caching | Supported | Per-connection LRU cache; eliminates repeated `COM_STMT_PREPARE` round-trips |
 | Streaming results | Supported | Row-by-row delivery with backpressure; supports large result sets |
 | Transactions | Supported | High-level `transaction()` with auto commit/rollback and retry; low-level `beginTransaction()` |
-| Savepoints | Supported | Full `SAVEPOINT` / `ROLLBACK TO` / `RELEASE SAVEPOINT` support |
-| Isolation levels | Supported | Per-transaction scoping; session isolation level is never mutated |
 | Stored procedures | Supported | Multi-result-set chains via `nextResult()` |
 | Multi-statements | Supported | Disabled by default; see [security warning](#multi-statements) |
 | SSL/TLS | Supported | TLS 1.2/1.3; optional mutual TLS and certificate verification |
@@ -28,8 +25,8 @@
 | Server-side query cancellation | Supported | Opt-in `KILL QUERY` via side-channel TCP connection |
 | Health checks | Supported | `healthCheck()` pings idle connections; evicts stale ones |
 | Pool stats | Supported | `$client->stats` for live pool introspection |
+| MariaDB compatibility | Supported | Core protocol fully compatible; some MariaDB-only extensions may not work — see [MariaDB compatibility](#mariadb-compatibility) |
 | `hiblaphp/sql` contracts | Supported | Fully implements `SqlClientInterface`; drivers are swappable |
-| Named parameters (`:name`) | Planned | Only positional `?` placeholders supported currently |
 | `LOAD DATA LOCAL INFILE` | Planned | Not yet implemented; throws `QueryException` if attempted |
 
 ## Contents
@@ -45,6 +42,7 @@
 - [Making queries](#making-queries)
   - [Simple queries](#simple-queries-text-protocol)
   - [Queries with parameters](#queries-with-parameters-binary-prepared-statements)
+  - [Named parameters](#named-parameters)
   - [Convenience methods](#convenience-methods)
 - [Prepared statements](#prepared-statements)
 - [Streaming results](#streaming-results)
@@ -66,6 +64,7 @@
   - [Pool stats](#pool-stats)
 - [Configuration options](#configuration-options)
 - [Limitations](#limitations)
+- [MariaDB compatibility](#mariadb-compatibility)
 - [SSL/TLS](#ssltls)
 - [zlib compression](#zlib-compression)
 - [Query cancellation](#query-cancellation)
@@ -74,6 +73,7 @@
 
 **Working with responses**
 - [Result inspection](#result-inspection)
+- [Numeric type handling](#numeric-type-handling)
 - [Multiple result sets](#multiple-result-sets)
 
 **Development**
@@ -94,21 +94,28 @@
 
 ## Installation
 
+>This package is currently in **beta**. Before installing, ensure your `composer.json`
+allows beta releases:
+
+```json
+{
+    "minimum-stability": "beta",
+    "prefer-stable": true
+}
+```
+
 ```bash
 composer require hiblaphp/mysql
 ```
 
 **Requirements:**
-
-| Requirement | Version | Notes |
-|---|---|---|
-| PHP | 8.4+ | |
-| `hiblaphp/promise` | — | |
-| `hiblaphp/event-loop` | — | |
-| `hiblaphp/async` | — | |
-| `hiblaphp/socket` | — | |
-| `hiblaphp/sql` | — | |
-| `rcalicdan/mysql-binary-protocol` | — | |
+ PHP 8.4+ 
+ `hiblaphp/promise` | — 
+| `hiblaphp/event-loop` | — 
+| `hiblaphp/async` | — 
+| `hiblaphp/socket` | — 
+| `hiblaphp/sql` | — 
+| `rcalicdan/mysql-binary-protocol` | — 
 
 **PHP extensions:**
 
@@ -116,9 +123,9 @@ composer require hiblaphp/mysql
 |---|---|---|
 | `openssl` | Optional | Required for SSL/TLS connections. Must be enabled if `ssl: true` is set in config. If not enabled, the connection will be rejected at handshake time if the extension is unavailable. See [SSL/TLS](#ssltls). |
 | `zlib` | Optional | Required for MySQL protocol compression. Must be loaded if `compress: true` is set in config. Included in most standard PHP builds. See [zlib compression](#zlib-compression). |
-| `bcmath` | Optional | Required for precise decimal and float handling when using binary prepared statements. Without it, `DECIMAL` and `FLOAT` column values returned via the binary protocol may lose precision due to floating-point representation. Strongly recommended for any application handling financial or high-precision numeric data. |
+| `bcmath` | Optional | Required for precise `BIGINT UNSIGNED` handling on 64-bit PHP when the value exceeds `PHP_INT_MAX`, and for all `BIGINT` arithmetic on 32-bit PHP. Also recommended for applications handling `DECIMAL` columns where exact string-based precision is required. See [Numeric type handling](#numeric-type-handling). |
 
-All three extensions are optional at install time but will be needed at runtime if you use the features they support. Most standard PHP builds ship with all three enabled and run `php -m` to verify which extensions are available in your environment.
+All three extensions are optional at install time but will be needed at runtime if you use the features they support. Most standard PHP builds ship with all three enabled. Run `php -m` to verify which extensions are available in your environment.
 
 ---
 
@@ -135,9 +142,15 @@ $client = new MysqlClient('mysql://test_user:test_password@127.0.0.1/test');
 $users = await($client->query('SELECT * FROM users WHERE active = ?', [true]));
 echo $users->rowCount; // property, not method (e.g. 42)
 
+// Named parameters
+$user = await($client->query(
+    'SELECT * FROM users WHERE email = :email AND status = :status',
+    ['email' => 'alice@example.com', 'status' => 'active']
+));
+
 // Prepared statement (recommended for repeated execution)
-$stmt = await($client->prepare('SELECT * FROM users WHERE email = ?'));
-$result = await($stmt->execute(['alice@example.com']));
+$stmt = await($client->prepare('SELECT * FROM users WHERE email = :email'));
+$result = await($stmt->execute(['email' => 'alice@example.com']));
 $stmt->close();
 
 // Streaming large result sets
@@ -156,6 +169,7 @@ foreach ($stream as $row) {
 - All operations return `PromiseInterface` objects.
 - You can use `await()` for linear code or `.then()` chaining.
 - Parameterized queries use the **MySQL binary protocol** (prepared statements), which is more efficient and SQL-injection safe.
+- Both positional `?` and named `:name` placeholders are supported. Named parameters are resolved entirely on the client side before the query is sent.
 - Server-side query cancellation via `KILL QUERY` is **opt-in** and disabled by default (see [Query cancellation](#query-cancellation)).
 - Implements [`hiblaphp/sql`](#hiblaphpsql-contracts) interfaces, making clients swappable at the type level.
 
@@ -252,7 +266,7 @@ $client = new MysqlClient(
 | `$maxLifetime` | `int` | `3600` | Maximum seconds a connection may live before it is rotated out, regardless of whether it is idle or active. Helps prevent issues with long-lived connections accumulating server-side state. |
 | `$statementCacheSize` | `int` | `256` | Maximum number of prepared statements to cache per connection (LRU eviction). Only relevant when `$enableStatementCache` is `true`. |
 | `$enableStatementCache` | `bool` | `true` | Whether to cache prepared statements per connection. When enabled, `query($sql, $params)` reuses existing server-side statement handles instead of issuing a new `COM_STMT_PREPARE` on every call. Disable only if you are managing statement lifecycles entirely through explicit `prepare()` calls. |
-| `$maxWaiters` | `int` | `0` | Maximum number of callers that may queue waiting for a free connection before a `PoolException` is thrown immediately. `0` means unlimited this means callers will always queue and wait up to `$acquireTimeout`. Set a non-zero value to shed load fast under pressure rather than letting the wait queue grow unbounded. |
+| `$maxWaiters` | `int` | `0` | Maximum number of callers that may queue waiting for a free connection before a `PoolException` is thrown immediately. `0` means unlimited — callers will always queue and wait up to `$acquireTimeout`. Set a non-zero value to shed load fast under pressure rather than letting the wait queue grow unbounded. |
 | `$acquireTimeout` | `float` | `10.0` | Maximum seconds to wait for a free connection before throwing a `PoolException`. Applies per-query when the pool is at capacity. |
 | `$enableServerSideCancellation` | `bool\|null` | `null` | Controls whether cancelling a query promise dispatches `KILL QUERY` to the server. `true` enables it, `false` disables it, `null` defers to the value in `$config`. When `null` and `$config` does not specify it, server-side cancellation is disabled. See [Query cancellation](#query-cancellation). |
 | `$resetConnection` | `bool\|null` | `null` | Controls whether `COM_RESET_CONNECTION` is sent when a connection is returned to the pool. `true` enables it, `false` disables it, `null` defers to the value in `$config`. Wiping session state on return prevents one caller's session variables from leaking into the next. Note that this also clears all server-side prepared statement handles — the statement cache is cleared automatically on the next borrow. See [Statement caching](#statement-caching). |
@@ -281,38 +295,93 @@ $result = await($client->query(
 ));
 ```
 
+### Named parameters
+
+Named placeholders (`:name` syntax) are supported as an alternative to positional `?`. They are resolved entirely on the client side before the query reaches MySQL, so there is no server-side or driver-level dependency and named parameters work identically across MySQL and MariaDB.
+
+```php
+// Named params in query()
+$result = await($client->query(
+    'SELECT * FROM users WHERE status = :status AND created_at > :since',
+    ['status' => 'active', 'since' => $since]
+));
+
+// Named params with execute() — order of keys does not matter
+$result = await($client->query(
+    'INSERT INTO orders (user_id, total, status) VALUES (:userId, :total, :status)',
+    ['status' => 'pending', 'total' => 99.99, 'userId' => 42] // any order
+));
+
+// Named params via prepare() — most useful when executing the same statement repeatedly
+$stmt = await($client->prepare(
+    'SELECT * FROM products WHERE category_id = :categoryId AND price > :minPrice'
+));
+
+$electronics = await($stmt->execute(['categoryId' => 1, 'minPrice' => 50.00]));
+$clothing    = await($stmt->execute(['categoryId' => 2, 'minPrice' => 25.00]));
+
+$stmt->close();
+```
+
+**Rules for named parameters:**
+
+- Named and positional `?` placeholders cannot be mixed in the same query.
+- Parameter names must start with a letter (`a–z`, `A–Z`) or underscore (`_`) and may contain letters, digits, and underscores.
+- Named parameters work identically inside `transaction()`, `beginTransaction()`, and all streaming methods.
+
 ### Convenience methods
 
 ```php
 // Returns affected row count
-$count = await($client->execute('UPDATE users SET last_login = NOW() WHERE id = ?', [$id]));
+$count = await($client->execute(
+    'UPDATE users SET last_login = NOW() WHERE id = :id',
+    ['id' => $userId]
+));
 
 // Returns last insert ID
-$lastId = await($client->executeGetId('INSERT INTO users (name, email) VALUES (?, ?)', [
-    'Alice', 'alice@example.com'
-]));
+$lastId = await($client->executeGetId(
+    'INSERT INTO users (name, email) VALUES (:name, :email)',
+    ['name' => 'Alice', 'email' => 'alice@example.com']
+));
 
 // Returns first row as associative array, or null
-$user = await($client->fetchOne('SELECT * FROM users WHERE id = ?', [$id]));
+$user = await($client->fetchOne(
+    'SELECT * FROM users WHERE id = :id',
+    ['id' => $userId]
+));
 
 // Returns value of first column (or named column) from first row
-$name = await($client->fetchValue('SELECT name FROM users WHERE id = ?', [$id]));
+$name = await($client->fetchValue(
+    'SELECT name FROM users WHERE id = :id',
+    ['id' => $userId]
+));
 ```
 
 ---
 
 ## Prepared statements
 
-Use explicit prepared statements when you need to execute the same query many times and want direct control over the statement lifecycle.
+Use explicit prepared statements when you need to execute the same query many times and want direct control over the statement lifecycle. Both positional `?` and named `:name` placeholders are supported.
 
 ```php
-$stmt = await($client->prepare('SELECT * FROM products WHERE category_id = ? AND price > ?'));
-
+// Positional placeholders
+$stmt = await($client->prepare(
+    'SELECT * FROM products WHERE category_id = ? AND price > ?'
+));
 $result1 = await($stmt->execute([1, 50.00]));
 $result2 = await($stmt->execute([2, 100.00]));
+$stmt->close();
 
-$stmt->close(); // Sends COM_STMT_CLOSE; called automatically on destruct if omitted
+// Named placeholders — order of keys in execute() does not matter
+$stmt = await($client->prepare(
+    'SELECT * FROM products WHERE category_id = :categoryId AND price > :minPrice'
+));
+$result1 = await($stmt->execute(['categoryId' => 1, 'minPrice' => 50.00]));
+$result2 = await($stmt->execute(['minPrice' => 100.00, 'categoryId' => 2])); // order irrelevant
+$stmt->close();
 ```
+
+`close()` sends `COM_STMT_CLOSE` to the server and is called automatically on destruct if omitted, but explicit calls are strongly recommended.
 
 > **Note:** `MysqlClient::query()` with parameters handles statement preparation and caching for you transparently. Explicit `prepare()` is intended for cases where you hold the statement open yourself across many executions.
 
@@ -337,13 +406,15 @@ foreach ($stream as $row) {
 }
 ```
 
-You can also stream **prepared statement** results:
+You can also stream **prepared statement** results with either positional or named parameters:
 
 ```php
-$stmt = await($client->prepare('SELECT * FROM logs WHERE created_at > ?'));
-$stream = await($stmt->executeStream([$since]));
+// With named parameters
+$stmt = await($client->prepare(
+    'SELECT * FROM logs WHERE created_at > :since AND level = :level'
+));
+$stream = await($stmt->executeStream(['since' => $since, 'level' => 'error']));
 
-// Stream metadata is available here too
 echo $stream->columnCount;
 print_r($stream->columns);
 
@@ -379,39 +450,36 @@ The `transaction()` method is the recommended way to run a transaction. It handl
 use Hibla\Sql\TransactionOptions;
 use Hibla\Sql\IsolationLevel;
 
-// Simple transaction — commit and rollback are handled automatically.
-// await() is safe here; the callback runs inside an implicit async() fiber.
+// Named parameters work identically inside transactions
 $result = await($client->transaction(function (TransactionInterface $tx) use ($from, $to) {
-    await($tx->execute('UPDATE accounts SET balance = balance - 100 WHERE id = ?', [$from]));
-    await($tx->execute('UPDATE accounts SET balance = balance + 100 WHERE id = ?', [$to]));
+    await($tx->execute(
+        'UPDATE accounts SET balance = balance - :amount WHERE id = :id',
+        ['amount' => 100, 'id' => $from]
+    ));
+    await($tx->execute(
+        'UPDATE accounts SET balance = balance + :amount WHERE id = :id',
+        ['amount' => 100, 'id' => $to]
+    ));
 
     return 'Transfer completed';
 }));
 ```
 
-**Partial failure is never silently committed.** If any `await()` inside the callback throws, whether from a query error, a constraint violation, or application code so the client automatically rolls back the entire transaction and re-throws the exception. There is no risk of a half-applied transaction reaching the database.
+**Partial failure is never silently committed.** If any `await()` inside the callback throws, the client automatically rolls back the entire transaction and re-throws the exception.
+
+**Retry on transient failures** such as deadlocks and lock wait timeouts is built in via `TransactionOptions`. The entire callback is re-run from scratch on each attempt.
 
 ```php
-// If the second execute throws (e.g. constraint violation),
-// the first execute is automatically rolled back. The database
-// is never left in a partially updated state.
-await($client->transaction(function (TransactionInterface $tx) use ($from, $to) {
-    await($tx->execute('UPDATE accounts SET balance = balance - 100 WHERE id = ?', [$from]));
-    await($tx->execute('UPDATE accounts SET balance = balance + 100 WHERE id = ?', [$to])); // throws
-    // ^ automatic ROLLBACK — the debit above is undone
-}));
-```
-
-**Retry on transient failures** such as deadlocks and lock wait timeouts is built in via `TransactionOptions`. The entire callback is re-run from scratch on each attempt, so the retry is always a clean transaction with no partial state carried over.
-
-```php
-// Retry up to 3 times on deadlock or lock wait timeout.
-// Each attempt starts a fresh transaction — no partial state is ever carried over.
-// The isolation level is applied per-transaction and never leaks into the session.
 await($client->transaction(
     function (TransactionInterface $tx) use ($from, $to) {
-        await($tx->execute('UPDATE accounts SET balance = balance - 100 WHERE id = ?', [$from]));
-        await($tx->execute('UPDATE accounts SET balance = balance + 100 WHERE id = ?', [$to]));
+        await($tx->execute(
+            'UPDATE accounts SET balance = balance - :amount WHERE id = :id',
+            ['amount' => 100, 'id' => $from]
+        ));
+        await($tx->execute(
+            'UPDATE accounts SET balance = balance + :amount WHERE id = :id',
+            ['amount' => 100, 'id' => $to]
+        ));
     },
     TransactionOptions::default()
         ->withAttempts(3)
@@ -419,31 +487,23 @@ await($client->transaction(
 ));
 ```
 
-The full query surface including streaming is available inside the callback. Because the callback runs in a fiber, streaming large result sets while issuing writes does not block other concurrent work on the event loop.
-
-```php
-await($client->transaction(function (TransactionInterface $tx) {
-    $stream = await($tx->stream('SELECT * FROM large_table WHERE status = ?', ['pending']));
-
-    foreach ($stream as $row) {
-        // Each await() here yields back to the event loop while the write is in flight,
-        // so other concurrent fibers continue to make progress.
-        await($tx->execute('UPDATE large_table SET status = ? WHERE id = ?', ['done', $row['id']]));
-    }
-}));
-```
-
 ---
 
 ### Low-level API: `beginTransaction()`
 
-Use `beginTransaction()` when you need explicit control over the transaction lifecycle and for example, when the commit or rollback decision depends on logic that cannot be expressed as a single callback, or when you need to hold a transaction open across multiple await points in your own fiber.
+Use `beginTransaction()` when you need explicit control over the transaction lifecycle.
 
 ```php
 $tx = await($client->beginTransaction());
 try {
-    await($tx->execute('UPDATE accounts SET balance = balance - 100 WHERE id = ?', [$from]));
-    await($tx->execute('UPDATE accounts SET balance = balance + 100 WHERE id = ?', [$to]));
+    await($tx->execute(
+        'UPDATE accounts SET balance = balance - :amount WHERE id = :id',
+        ['amount' => 100, 'id' => $from]
+    ));
+    await($tx->execute(
+        'UPDATE accounts SET balance = balance + :amount WHERE id = :id',
+        ['amount' => 100, 'id' => $to]
+    ));
     await($tx->commit());
 } catch (\Throwable $e) {
     await($tx->rollback());
@@ -451,78 +511,65 @@ try {
 }
 ```
 
-Unlike `transaction()`, the low-level API does **not** retry automatically and does **not** wrap the work in a fiber so you are responsible for the full lifecycle. Prefer `transaction()` in all cases where it is sufficient.
-
-> **Anti-pattern — relying on GC to roll back:**
-> ```php
-> $tx = await($client->beginTransaction());
-> await($tx->execute('UPDATE accounts SET balance = 0 WHERE id = ?', [$id]));
-> // $tx goes out of scope — ROLLBACK is issued automatically, but on a best-effort
-> // basis only. The destructor cannot await, so the rollback may be lost under load.
-> ```
-> Always call `commit()` or `rollback()` explicitly. The automatic rollback on GC is a
-> safety net, not a substitute for explicit lifecycle management.
+Unlike `transaction()`, the low-level API does **not** retry automatically and does **not** wrap the work in a fiber. Prefer `transaction()` in all cases where it is sufficient.
 
 ---
 
 ### Savepoints
 
-Savepoints let you mark a point within a transaction and roll back to it selectively without abandoning the entire transaction. This is the correct tool when you want to attempt a risky operation but recover from its failure without losing earlier work in the same transaction.
-
-**Without savepoints**, any exception inside `transaction()` triggers a full rollback of everything — there is no partial recovery. If you need finer-grained control, establish a savepoint before the risky section:
+Savepoints let you mark a point within a transaction and roll back to it selectively without abandoning the entire transaction.
 
 ```php
 await($client->transaction(function (TransactionInterface $tx) {
-    // This work is safe and committed regardless of what happens below.
-    await($tx->execute('INSERT INTO audit_log (event) VALUES (?)', ['attempt']));
+    await($tx->execute(
+        'INSERT INTO audit_log (event) VALUES (:event)',
+        ['event' => 'attempt']
+    ));
 
     await($tx->savepoint('before_risky_op'));
 
     try {
-        await($tx->execute('INSERT INTO external_refs (id) VALUES (?)', [$externalId]));
+        await($tx->execute(
+            'INSERT INTO external_refs (id) VALUES (:id)',
+            ['id' => $externalId]
+        ));
     } catch (\Throwable $e) {
-        // Roll back only the risky section. The audit_log insert above is preserved.
         await($tx->rollbackTo('before_risky_op'));
     }
 
     await($tx->releaseSavepoint('before_risky_op'));
-
-    // Commit includes the audit_log insert but not the failed external_refs insert.
 }));
 ```
 
-Rolling back to a savepoint also **clears the tainted state** on the transaction, so you can continue issuing queries after a partial rollback without the client rejecting them.
+Rolling back to a savepoint also **clears the tainted state** on the transaction, so you can continue issuing queries after a partial rollback.
 
 ---
 
 ### Transaction lifecycle rules
 
-**Isolation level scoping.** Isolation levels are applied via `SET TRANSACTION ISOLATION LEVEL` immediately before `START TRANSACTION`, scoping them strictly to that transaction. The session isolation level is never mutated, so concurrent transactions on the same pool are never affected.
+**Isolation level scoping.** Isolation levels are applied via `SET TRANSACTION ISOLATION LEVEL` immediately before `START TRANSACTION`, scoping them strictly to that transaction. The session isolation level is never mutated.
 
-**Tainted state.** If any query inside a transaction throws, the transaction is marked tainted. The client will reject all further queries on that transaction until you call `rollback()` or roll back to a savepoint via `rollbackTo()`. This prevents accidental partial commits where some queries succeeded before the failure.
+**Tainted state.** If any query inside a transaction throws, the transaction is marked tainted. The client will reject all further queries on that transaction until you call `rollback()` or roll back to a savepoint via `rollbackTo()`.
 
-**Automatic rollback on partial failure.** When using `transaction()`, any unhandled exception from the callback causes an automatic `ROLLBACK` before the exception propagates to the caller. The transaction is never left open and the connection is returned to the pool cleanly.
+**Automatic rollback on partial failure.** When using `transaction()`, any unhandled exception from the callback causes an automatic `ROLLBACK` before the exception propagates to the caller.
 
-**GC safety net.** If a `Transaction` object is garbage collected without an explicit `commit()` or `rollback()`, a `ROLLBACK` is issued automatically and the connection is returned to the pool. This is just a safety net and always manage the lifecycle explicitly.
+**GC safety net.** If a `Transaction` object is garbage collected without an explicit `commit()` or `rollback()`, a `ROLLBACK` is issued automatically. Always manage the lifecycle explicitly.
 
-**`commit()` and `rollback()` are not cancellable.** Dispatching `KILL QUERY` against a commit or rollback would leave the transaction in an undefined state on the server. These operations always run to completion regardless of the `enableServerSideCancellation` setting.
+**`commit()` and `rollback()` are not cancellable.** These operations always run to completion regardless of the `enableServerSideCancellation` setting.
 
 ---
 
 ## Stored procedures
 
-Stored procedures are fully supported. Because a `CALL` statement may return multiple result sets (one per `SELECT` inside the procedure, plus a final status `OK` packet), the client models them as a **linked chain** of result objects you can walk with `nextResult()`.
+Stored procedures are fully supported. Results are returned as a **linked chain** traversable via `nextResult()`.
 
 ```php
-// Call a stored procedure
 $result = await($client->query('CALL get_user_with_orders(?)', [$userId]));
 
-// First result set — e.g. the user row
 foreach ($result as $row) {
     echo $row['name'];
 }
 
-// Second result set — e.g. the user's orders
 $orders = $result->nextResult();
 if ($orders !== null) {
     foreach ($orders as $order) {
@@ -531,25 +578,11 @@ if ($orders !== null) {
 }
 ```
 
-Stored procedures work identically inside transactions:
-
-```php
-await($client->transaction(function (TransactionInterface $tx) use ($userId) {
-    $result = await($tx->query('CALL transfer_funds(?, ?, ?)', [$from, $to, 100]));
-
-    // Inspect the procedure's result sets
-    $summary = $result->fetchOne();
-    echo $summary['status'];
-}));
-```
-
 ---
 
 ## Multi-statements
 
-> **Security warning, this is disabled by default.** Multi-statement support allows multiple SQL statements separated by `;` to be sent in a single call. This significantly increases the blast radius of a SQL injection vulnerability: a successful injection can chain arbitrary additional statements in the same round-trip. Only enable this if you have a genuine need for it and fully understand the risk.
-
-Multi-statements are disabled by default. Enable them explicitly via the `multi_statements` config option:
+> **Security warning — disabled by default.** Multi-statement support allows multiple SQL statements separated by `;` to be sent in a single call. Enabling this significantly increases the blast radius of a SQL injection vulnerability. Only enable it if you have a genuine need and fully understand the risk.
 
 ```php
 $client = new MysqlClient([
@@ -557,67 +590,39 @@ $client = new MysqlClient([
     'username'         => 'root',
     'password'         => '',
     'database'         => 'app',
-    'multi_statements' => true, // disabled by default, see security warning above
+    'multi_statements' => true,
 ]);
-```
 
-Once enabled, you can send multiple statements in a single `query()` call. The results are returned as a linked chain traversable via `nextResult()`, identical to stored procedure results:
-
-```php
 $result = await($client->query('SELECT * FROM users; SELECT * FROM orders; SELECT COUNT(*) FROM stats'));
 
-// First result set — users
-foreach ($result as $row) { ... }
-
-// Second result set — orders
-$orders = $result->nextResult();
-foreach ($orders as $row) { ... }
-
-// Third result set — count
-$stats = $orders->nextResult();
-$count = $stats->fetchOne();
+foreach ($result as $row) { ... }             // users
+foreach ($result->nextResult() as $row) { ... } // orders
+$count = $result->nextResult()->nextResult()->fetchOne();
 ```
-
-Multi-statements can also be used inside transactions:
-
-```php
-await($client->transaction(function (TransactionInterface $tx) {
-    $result = await($tx->query(
-        'UPDATE accounts SET balance = balance - 100 WHERE id = 1;
-         UPDATE accounts SET balance = balance + 100 WHERE id = 2'
-    ));
-}));
-```
-
-> **Multi-statements vs stored procedures:** Stored procedures (`CALL`) are safe with the default configuration and are the preferred way to group multiple queries on the server. Multi-statements should only be considered when you need ad-hoc batching from the client side and your application guarantees that the SQL is never user-influenced.
 
 ---
 
 ## Connection pooling
 
-The pool manages the full connection lifecycle automatically. By default it is **fully lazy** (`minConnections: 0`), so no TCP connections are opened until the first query is dispatched, keeping startup cost at zero.
+The pool manages the full connection lifecycle automatically. By default it is **fully lazy** (`minConnections: 0`).
 
 ```php
 $client = new MysqlClient(
     config: $config,
-    minConnections: 0,        // lazy, connections created on demand only
-    maxConnections: 50,       // hard cap on open connections (default: 10)
-    idleTimeout: 600,         // seconds before idle connections are evicted (default: 60)
-    maxLifetime: 3600,        // seconds before a connection is rotated regardless of use
-    acquireTimeout: 10.0,     // seconds to wait for a free connection before failing (default: 10.0)
-    resetConnection: true,    // send COM_RESET_CONNECTION on pool release (default: false)
+    minConnections: 0,
+    maxConnections: 50,
+    idleTimeout: 600,
+    maxLifetime: 3600,
+    acquireTimeout: 10.0,
+    resetConnection: true,
 );
 ```
 
-Set `minConnections > 0` only if you need pre-warmed connections at startup to absorb an immediate burst of traffic without waiting for the TCP handshake and MySQL authentication on the first requests.
-
 ### Check-on-borrow health strategy
 
-The pool uses a **check-on-borrow** strategy to validate connections before handing them to a caller. Before a connection is checked out of the pool, the client verifies it is still alive, catching stale connections that were silently dropped by the server, a proxy, or a firewall while sitting idle. A connection that fails the check is discarded and replaced transparently, so callers never receive a dead connection. This does add a small validation step on every borrow; if this overhead is a concern for very high-frequency short queries, pair it with `resetConnection: false` and a conservative `idleTimeout` to reduce the number of connections that age to the point of needing validation.
+Before a connection is checked out of the pool, the client verifies it is still alive, catching stale connections that were silently dropped by the server, a proxy, or a firewall. A connection that fails the check is discarded and replaced transparently.
 
 ### Shutdown strategies
-
-`MysqlClient` registers a destructor that issues a force-close automatically when the object is garbage collected, including at the end of a normal script run. This means connections are never silently leaked if you forget to call `close()`. That said, explicit shutdown is still strongly recommended for production code: the destructor cannot `await` anything, so any queries still in flight at GC time are abandoned rather than drained gracefully.
 
 ```php
 // Graceful — stops new work, waits for active queries to finish, then closes
@@ -625,15 +630,13 @@ await($client->closeAsync(timeout: 30.0));
 
 // Force — closes everything immediately, rejects pending waiters
 $client->close();
-
-// Acceptable for short CLI scripts where abrupt teardown is fine.
-// The destructor will force-close automatically when $client goes out of scope.
-unset($client);
 ```
+
+The destructor issues a force-close automatically when the object is garbage collected.
 
 ### `resetConnection` and statement cache interaction
 
-When `resetConnection` is enabled, `COM_RESET_CONNECTION` wipes all server-side prepared statement handles. The client automatically clears the per-connection statement cache on checkout to prevent executing stale statement IDs. The `onConnect` hook (if set) is also **re-run after every reset** to restore session state.
+When `resetConnection` is enabled, `COM_RESET_CONNECTION` wipes all server-side prepared statement handles. The client automatically clears the per-connection statement cache on checkout to prevent executing stale statement IDs. The `onConnect` hook is also **re-run after every reset**.
 
 ---
 
@@ -641,34 +644,21 @@ When `resetConnection` is enabled, `COM_RESET_CONNECTION` wipes all server-side 
 
 ### Health check
 
-`healthCheck()` pings all idle connections in the pool and returns a summary of results. Stale connections that fail the ping are discarded and not returned to the pool.
-
 ```php
 $result = await($client->healthCheck());
 // e.g. ['checked' => 5, 'failed' => 1, 'evicted' => 1]
 ```
 
-This is useful in readiness probes or startup checks to verify the database is reachable before accepting traffic.
-
 ### Pool stats
-
-The `$stats` property returns a snapshot of the current pool state without touching the database:
 
 ```php
 $stats = $client->stats;
-// e.g. [
-//     'total'   => 8,   // total open connections
-//     'idle'    => 5,   // connections sitting in the pool
-//     'active'  => 3,   // connections currently executing a query or transaction
-//     'waiting' => 0,   // callers waiting for a free connection
-// ]
+// e.g. ['total' => 8, 'idle' => 5, 'active' => 3, 'waiting' => 0]
 ```
 
 ---
 
 ## Configuration options
-
-All options can be passed via DSN, array, or `MysqlConfig` object.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
@@ -679,63 +669,58 @@ All options can be passed via DSN, array, or `MysqlConfig` object.
 | `database` | string | `''` | Default schema |
 | `charset` | string | `'utf8mb4'` | Connection character set |
 | `connect_timeout` | int | `10` | Seconds before a connect attempt is aborted |
-| `ssl` | bool | `false` | Require SSL/TLS — see [SSL/TLS](#ssltls) |
+| `ssl` | bool | `false` | Require SSL/TLS |
 | `ssl_ca` | string\|null | `null` | Path to CA certificate |
 | `ssl_cert` | string\|null | `null` | Path to client certificate |
 | `ssl_key` | string\|null | `null` | Path to client key |
 | `ssl_verify` | bool | `false` | Verify server certificate |
-| `compress` | bool | `false` | Enable zlib protocol compression — see [zlib compression](#zlib-compression) |
+| `compress` | bool | `false` | Enable zlib protocol compression |
 | `enable_server_side_cancellation` | bool | `false` | Dispatch `KILL QUERY` on promise cancellation |
 | `kill_timeout_seconds` | float | `3.0` | Timeout for the `KILL QUERY` side-channel |
 | `reset_connection` | bool | `false` | Send `COM_RESET_CONNECTION` on pool release |
-| `multi_statements` | bool | `false` | Allow stacked queries — **security risk, use with care** |
-
-Example using an array:
-
-```php
-$client = new MysqlClient([
-    'host'                            => 'localhost',
-    'username'                        => 'root',
-    'password'                        => '',
-    'database'                        => 'app',
-    'charset'                         => 'utf8mb4',
-    'enable_server_side_cancellation' => true,
-    'reset_connection'                => true,
-    'compress'                        => true,
-    'ssl'                             => true,
-    'ssl_verify'                      => true,
-]);
-```
+| `multi_statements` | bool | `false` | Allow stacked queries — **security risk** |
 
 ---
 
 ## Limitations
 
-The following features are **not currently supported** and are planned for a future release:
-
 | Feature | Notes |
 |---|---|
-| `LOAD DATA LOCAL INFILE` | Local infile is not implemented. Attempting to use it will result in a `QueryException`. |
-| Named prepared statement parameters (`:name` syntax) | Only positional `?` placeholders are supported. Named parameters such as `:userId` or `:email` are not recognized by the binary protocol layer. |
+| `LOAD DATA LOCAL INFILE` | Not implemented. Attempting to use it will result in a `QueryException`. |
 
-Both of these are on the roadmap and will be addressed in a future release.
+---
+
+## MariaDB compatibility
+
+This client connects to MariaDB using the standard MySQL binary protocol handshake, so all core features work out of the box. The full test suite runs against MariaDB LTS on every push (see `.github/workflows/mariadb.yml`).
+
+| Feature | Status |
+|---|---|
+| Queries and parameterized queries | ✅ Fully supported |
+| Named parameters (`:name`) | ✅ Fully supported |
+| Prepared statements | ✅ Fully supported |
+| Statement caching | ✅ Fully supported |
+| Streaming results | ✅ Fully supported |
+| Transactions and savepoints | ✅ Fully supported |
+| Stored procedures | ✅ Fully supported |
+| SSL/TLS | ✅ Fully supported |
+| zlib compression | ✅ Fully supported |
+| Connection pooling | ✅ Fully supported |
+
+> **MariaDB-specific extensions:** Some features that go beyond the standard MySQL protocol are not supported and may not work correctly. These include but may not be limited to:
+>
+> - **`RETURNING` clause** on `INSERT`/`UPDATE`/`DELETE` (MariaDB 10.5+) — the client does not handle result sets returned by DML statements in this form.
+> - **Sequence objects** (`CREATE SEQUENCE`, `NEXT VALUE FOR`) — no dedicated handling; you can still query sequence values as plain SQL but `lastInsertId` semantics may not reflect sequence values.
+> - **MariaDB-specific JSON functions and syntax** that deviate from MySQL's JSON dialect.
+> - **`COMPRESSED` column format** and other storage engine extensions that affect the wire protocol.
+>
+> If you encounter a MariaDB-specific feature that does not work as expected, please keep it mind that this is a Mysql client connector not a dedicated MariaDb client.
 
 ---
 
 ## SSL/TLS
 
-SSL/TLS support is built in. Enable it via the `ssl` option and, optionally, supply certificate paths for mutual TLS or custom CA verification.
-
 ```php
-// Require SSL — server certificate not verified (useful for self-signed certs)
-$client = new MysqlClient([
-    'host'     => 'db.example.com',
-    'username' => 'app',
-    'password' => 'secret',
-    'database' => 'production',
-    'ssl'      => true,
-]);
-
 // Require SSL with full server certificate verification
 $client = new MysqlClient([
     'host'       => 'db.example.com',
@@ -767,8 +752,6 @@ The SSL upgrade happens during the MySQL handshake using PHP's `stream_socket_en
 
 ## zlib compression
 
-The client supports the **MySQL protocol compression** extension, which compresses packets using PHP's built-in **zlib** extension before they are written to the socket. This can substantially reduce bandwidth usage for large result sets or high-throughput workloads where network I/O is the bottleneck.
-
 ```php
 $client = new MysqlClient([
     'host'     => 'db.example.com',
@@ -779,59 +762,35 @@ $client = new MysqlClient([
 ]);
 ```
 
-Compression is negotiated at handshake time via the `CLIENT_COMPRESS` capability flag. If the server does not support compression, the connection proceeds without it and no error is raised. PHP's `zlib` extension must be loaded (it is included in most standard PHP builds).
+Compression is negotiated at handshake time via the `CLIENT_COMPRESS` capability flag. If the server does not support compression, the connection proceeds without it. PHP's `zlib` extension must be loaded.
 
-**When to enable compression:**
-
-- The MySQL server is on a remote host where network bandwidth is limited.
-- Queries return large result sets (e.g. wide tables, BLOB columns).
-- CPU on both client and server is plentiful relative to available network throughput.
-
-**When to leave it disabled:**
-
-- The server is on the same machine or a local network (loopback, LAN), as compression overhead outweighs any bandwidth saving.
-- Queries are small and frequent, as the per-packet overhead is not worth it.
-
-Compression and SSL can be used together without restriction.
+**When to enable compression:** the server is remote with limited bandwidth and queries return large result sets. **When to leave it disabled:** the server is on the same machine or local network, as compression overhead outweighs any bandwidth saving for small, frequent queries.
 
 ---
 
 ## Query cancellation
 
-Server-side query cancellation is **disabled by default**. When disabled, calling `$promise->cancel()` transitions the promise to the cancelled state immediately on the client side, so your code stops waiting and the promise is released for garbage collection. However, **the MySQL server has no knowledge of the cancellation**: it continues executing the query to completion on its own thread. The connection remains checked out of the pool and unavailable until the server finishes and returns its response, at which point the result is silently discarded and the connection is returned to the pool normally.
+Server-side query cancellation is **disabled by default**. When disabled, `$promise->cancel()` transitions the promise to the cancelled state on the client side only — the MySQL server continues executing the query to completion and the connection remains checked out of the pool until it finishes.
 
-In short, client-side cancellation without server-side cancellation enabled is a *local opt-out*, not a true query abort. It is useful when you no longer care about the result but can tolerate the connection being held until the server finishes on its own schedule.
-
-**Why it is disabled by default:**
-
-- **It is pointless for typical fast queries.** The overwhelming majority of queries, including simple lookups, indexed reads, and small writes, complete in milliseconds. By the time a cancel is dispatched and the `KILL QUERY` side-channel connection is established, the original query has almost certainly already finished. Paying the overhead of an extra TCP connection per cancellation for queries that finish in under 5 ms provides no real benefit.
-- A proxy or load balancer may route the kill connection to a different backend node, making the kill ineffective.
-- Connection quotas make additional side-channel connections unacceptable in some environments.
-- Query duration is often already bounded by server-side timeouts (e.g. `max_execution_time`), making client-initiated cancellation redundant.
-
-Enable it explicitly only when your workload includes genuinely long-running queries such as full-table scans, heavy aggregations, or report generation, where stopping server execution and releasing locks immediately has meaningful value:
+Enable it explicitly for long-running queries where stopping server execution and releasing locks immediately has meaningful value:
 
 ```php
 $client = new MysqlClient(
     config: $config,
     enableServerSideCancellation: true,
 );
-```
 
-When enabled, cancelling a query promise dispatches `KILL QUERY <thread_id>` to the server via a **dedicated side-channel TCP connection**. This stops the server-side query immediately and releases locks. The pool then absorbs any stale kill flag left by MySQL with `DO SLEEP(0)` before returning the connection to normal use.
-
-```php
 $promise = $client->query('SELECT * FROM huge_table');
-Loop::addTimer(5.0, fn() => $promise->cancel()); // KILL QUERY sent if cancellation is enabled
+Loop::addTimer(5.0, fn() => $promise->cancel()); // KILL QUERY dispatched
 ```
 
-> **Note:** `commit()` and `rollback()` are never cancellable regardless of this setting, as dispatching `KILL QUERY` against a commit or rollback would leave the transaction in an undefined state on the server.
+When enabled, cancelling a query promise dispatches `KILL QUERY <thread_id>` via a **dedicated side-channel TCP connection**. The pool then absorbs any stale kill flag with `DO SLEEP(0)` before returning the connection to normal use.
+
+> **Note:** `commit()` and `rollback()` are never cancellable regardless of this setting.
 
 ---
 
 ## onConnect hook
-
-Run initialization logic on every **new physical connection**, immediately after the MySQL handshake completes. The hook receives a `ConnectionSetup` interface, which is a minimal surface that exposes only `query()` and `execute()` to prevent internal connection objects from leaking.
 
 ```php
 $client = new MysqlClient(
@@ -843,25 +802,22 @@ $client = new MysqlClient(
 );
 ```
 
-> **Important:** If `resetConnection` is enabled, `COM_RESET_CONNECTION` wipes all session variables back to server defaults, putting the connection in a state identical to immediately after the initial handshake. The `onConnect` hook is therefore **re-invoked after every reset** to restore session state. If the hook throws or rejects after a reset, the connection is dropped entirely rather than returned to the pool in an unknown state.
+> If `resetConnection` is enabled, `COM_RESET_CONNECTION` wipes all session variables. The `onConnect` hook is therefore **re-invoked after every reset** to restore session state.
 
 ---
 
 ## Statement caching
 
-Prepared statements are cached **per connection** (default: 256 slots, LRU eviction). This eliminates repeated `COM_STMT_PREPARE` round-trips for queries that are executed frequently.
-
-Caching is enabled by default and is transparent, so `$client->query($sql, $params)` uses the cache automatically.
+Prepared statements are cached **per connection** (default: 256 slots, LRU eviction).
 
 ```php
 $client = new MysqlClient(
     config: $config,
-    enableStatementCache: true,  // default: true
-    statementCacheSize: 512      // default: 256
+    enableStatementCache: true,
+    statementCacheSize: 512
 );
 
-// Invalidate all caches manually (e.g. after schema changes)
-$client->clearStatementCache();
+$client->clearStatementCache(); // Invalidate all caches (e.g. after schema changes)
 ```
 
 > When `resetConnection` is enabled, the per-connection cache is automatically cleared on checkout because `COM_RESET_CONNECTION` drops all server-side statement handles.
@@ -873,52 +829,109 @@ $client->clearStatementCache();
 ```php
 $result = await($client->query('SELECT * FROM users'));
 
-// rowCount and other fields are properties, not methods
-echo $result->rowCount;       // int, number of rows in result set
-echo $result->affectedRows;   // int, rows affected by INSERT/UPDATE/DELETE
-echo $result->lastInsertId;   // int, last auto-increment ID
-echo $result->warningCount;   // int, MySQL warnings generated
-echo $result->connectionId;   // int, server thread ID that executed the query
-echo $result->columnCount;    // int, number of columns
+echo $result->rowCount;      // int — rows in result set
+echo $result->affectedRows;  // int — rows affected by INSERT/UPDATE/DELETE
+echo $result->lastInsertId;  // int — last auto-increment ID
+echo $result->warningCount;  // int — MySQL warnings generated
+echo $result->connectionId;  // int — server thread ID
+echo $result->columnCount;   // int — number of columns
 
-// Column metadata
 foreach ($result->fields as $col) {
-    echo $col->name . ': ' . $col->typeName; // e.g. "id: INT UNSIGNED"
+    echo $col->name . ': ' . $col->typeName; // e.g. "price: DECIMAL"
 }
 
-// Iterating rows
-foreach ($result as $row) {
-    echo $row['name'];
-}
+foreach ($result as $row) { echo $row['name']; }
 
-// Fetch helpers
-$row   = $result->fetchOne();               // first row or null
-$value = $result->fetchOne()['email'];      // specific field
-$all   = $result->fetchAll();               // all rows as array
-$col   = $result->fetchColumn('name');      // single column across all rows
+$row   = $result->fetchOne();
+$all   = $result->fetchAll();
+$col   = $result->fetchColumn('name');
 ```
+
+---
+
+## Numeric type handling
+
+When queries are executed via prepared statements (i.e. any call to `query()` or `execute()` with `$params`, or explicit `prepare()`), column values are decoded from the **MySQL binary protocol**. The PHP type you receive depends on the MySQL column type.
+
+### Integer types
+
+| MySQL type | PHP type returned | Notes |
+|---|---|---|
+| `TINYINT` | `int` | Signed or unsigned; sign conversion applied automatically |
+| `SMALLINT` | `int` | Signed or unsigned |
+| `MEDIUMINT` | `int` | Signed or unsigned |
+| `INT` | `int` | Signed or unsigned |
+| `BIGINT` (signed) | `int` | Native 64-bit integer on 64-bit PHP; always fits |
+| `BIGINT UNSIGNED` (≤ `PHP_INT_MAX`) | `int` | Fast path on 64-bit PHP |
+| `BIGINT UNSIGNED` (> `PHP_INT_MAX`) | `string` | BCMath string if `bcmath` is loaded; `sprintf('%.0f')` fallback otherwise — precision may be lost without `bcmath` |
+
+`BIGINT` arithmetic on **32-bit PHP** always falls back to `string` (via BCMath when available, `sprintf` otherwise), because 32-bit PHP cannot represent 64-bit integers natively.
+
+### Floating-point types
+
+| MySQL type | PHP type returned | Notes |
+|---|---|---|
+| `FLOAT` | `float` | Decoded from 4 bytes using IEEE 754 single precision (`unpack('g', ...)`) |
+| `DOUBLE` | `float` | Decoded from 8 bytes using IEEE 754 double precision (`unpack('e', ...)`) |
+
+Both `FLOAT` and `DOUBLE` are returned as PHP `float`. Because PHP `float` is IEEE 754 double precision (64-bit), a MySQL `FLOAT` (32-bit) is widened on decode and you may observe minor rounding artefacts compared to the original single-precision value. If exact representation matters, store the value as `DECIMAL` instead.
+
+### Decimal and string-encoded types
+
+| MySQL type | PHP type returned | Notes |
+|---|---|---|
+| `DECIMAL` / `NUMERIC` | `string` | Always returned as a string to preserve exact precision. Never cast to `float`. |
+| `CHAR`, `VARCHAR`, `TEXT` variants | `string` | |
+| `BINARY`, `VARBINARY`, `BLOB` variants | `string` (raw bytes) | |
+| `JSON` | `string` | Raw JSON string; decode with `json_decode()` as needed |
+| `DATE` | `string` | Format: `'YYYY-MM-DD'`; zero date returns `'0000-00-00'` |
+| `DATETIME`, `TIMESTAMP` | `string` | Format: `'YYYY-MM-DD HH:MM:SS'` or `'YYYY-MM-DD HH:MM:SS.ffffff'` if microseconds are non-zero |
+| `TIME` | `string` | Format: `'HH:MM:SS'` or `'HH:MM:SS.ffffff'`; supports negative values and day overflow (e.g. `'838:59:59'`) |
+| `YEAR` | `int` | Decoded as a 2-byte integer |
+| `BIT` | `string` (raw bytes) | |
+| `NULL` | `null` | Null bitmap checked before decode; always `null` |
+
+### Key rule: never cast `DECIMAL` to `float`
+
+`DECIMAL` columns are intentionally returned as strings. Casting them to `float` silently discards precision:
+
+```php
+$result = await($client->query(
+    'SELECT price FROM products WHERE id = :id',
+    ['id' => 1]
+));
+
+$row = $result->fetchOne();
+
+// Correct — preserve the exact string value from the server
+$price = $row['price']; // "19.99" (string)
+
+// Also correct — use bcmath for arithmetic on decimals
+$tax   = bcmul($row['price'], '0.20', 2); // "4.00"
+$total = bcadd($row['price'], $tax, 2);   // "23.99"
+
+// WRONG — loses precision for large or high-decimal-place values
+$price = (float) $row['price']; // may not round-trip exactly
+```
+
+### `bcmath` recommendation
+
+The `bcmath` extension is strongly recommended for any application that handles financial data, high-precision arithmetic, or `BIGINT UNSIGNED` values near `PHP_INT_MAX`. Without it, those edge cases fall back to `sprintf('%.0f', ...)` which may silently lose precision for very large integers.
 
 ---
 
 ## Multiple result sets
 
-Stored procedures and `multi_statements` queries may return more than one result set. These are linked as a chain traversable via `nextResult()`:
-
 ```php
-// Calling a stored procedure that returns multiple SELECTs
 $result = await($client->query('CALL get_user_with_orders(?)', [$userId]));
 
-// First result set (e.g. user row)
-foreach ($result as $row) { ... }
+foreach ($result as $row) { ... }            // first result set
 
-// Second result set (e.g. orders)
 $next = $result->nextResult();
 if ($next !== null) {
-    foreach ($next as $row) { ... }
+    foreach ($next as $row) { ... }          // second result set
 }
 ```
-
-> Stored procedures work out of the box. The `multi_statements` option (stacked raw SQL separated by `;`) is a separate feature that is disabled by default due to SQL injection risk. See [Multi-statements](#multi-statements) for details.
 
 ---
 
@@ -930,17 +943,17 @@ Implements `Hibla\Sql\SqlClientInterface`.
 
 | Method / Property | Returns | Description |
 |---|---|---|
-| `$stats` | `array<string, int\|bool>` | Snapshot of pool state: total, idle, active, and waiting connection counts. No database round-trip. |
-| `query(string $sql, array $params = [])` | `Promise<MysqlResult>` | Execute a query. Uses binary protocol when params are given. |
+| `$stats` | `array<string, int\|bool>` | Snapshot of pool state. No database round-trip. |
+| `query(string $sql, array $params = [])` | `Promise<MysqlResult>` | Execute a query. Uses binary protocol when params are given. Supports named params. |
 | `execute(string $sql, array $params = [])` | `Promise<int>` | Execute and return affected row count. |
 | `executeGetId(string $sql, array $params = [])` | `Promise<int>` | Execute and return last insert ID. |
 | `fetchOne(string $sql, array $params = [])` | `Promise<array\|null>` | First row as associative array, or null. |
 | `fetchValue(string $sql, $column = null, array $params = [])` | `Promise<mixed>` | Single scalar value from first row. |
-| `prepare(string $sql)` | `Promise<ManagedPreparedStatement>` | Prepare a reusable statement. |
-| `stream(string $sql, array $params = [], int $bufferSize = 100)` | `Promise<MysqlRowStream>` | Stream rows with backpressure. |
-| `beginTransaction(?IsolationLevelInterface $level = null)` | `Promise<TransactionInterface>` | Begin a transaction manually. Isolation level is per-transaction, not session-wide. |
-| `transaction(callable $callback, ?TransactionOptions $options = null)` | `Promise<mixed>` | Run a transaction with automatic commit/rollback and optional retry. Callback runs inside an implicit fiber. |
-| `healthCheck()` | `Promise<array<string, int>>` | Pings all idle connections and returns a summary. Stale connections are evicted. |
+| `prepare(string $sql)` | `Promise<ManagedPreparedStatement>` | Prepare a reusable statement. Supports named params. |
+| `stream(string $sql, array $params = [], int $bufferSize = 100)` | `Promise<MysqlRowStream>` | Stream rows with backpressure. Supports named params. |
+| `beginTransaction(?IsolationLevelInterface $level = null)` | `Promise<TransactionInterface>` | Begin a transaction manually. |
+| `transaction(callable $callback, ?TransactionOptions $options = null)` | `Promise<mixed>` | Run a transaction with automatic commit/rollback and optional retry. |
+| `healthCheck()` | `Promise<array<string, int>>` | Pings all idle connections and returns a summary. |
 | `clearStatementCache()` | `void` | Invalidate all per-connection statement caches. |
 | `close()` | `void` | Force-close all connections immediately. |
 | `closeAsync(float $timeout = 0.0)` | `Promise<void>` | Graceful shutdown; waits for active queries to finish. |
@@ -949,11 +962,9 @@ Implements `Hibla\Sql\SqlClientInterface`.
 
 | Method | Returns | Description |
 |---|---|---|
-| `execute(array $params = [])` | `Promise<MysqlResult>` | Execute with given parameters. |
-| `executeStream(array $params = [], int $bufferSize = 100)` | `Promise<MysqlRowStream>` | Execute and stream results. |
+| `execute(array $params = [])` | `Promise<MysqlResult>` | Execute with given parameters. Supports named params. |
+| `executeStream(array $params = [], int $bufferSize = 100)` | `Promise<MysqlRowStream>` | Execute and stream results. Supports named params. |
 | `close()` | `Promise<void>` | Send `COM_STMT_CLOSE` and release connection to pool. |
-
-> If `close()` is never called, it is invoked automatically when the object is garbage collected.
 
 ### `TransactionInterface`
 
@@ -961,7 +972,7 @@ Implements `Hibla\Sql\Transaction`.
 
 | Method | Returns | Description |
 |---|---|---|
-| `query(string $sql, array $params = [])` | `Promise<MysqlResult>` | Execute a query inside the transaction. |
+| `query(string $sql, array $params = [])` | `Promise<MysqlResult>` | Execute a query inside the transaction. Supports named params. |
 | `execute(string $sql, array $params = [])` | `Promise<int>` | Execute and return affected rows. |
 | `executeGetId(string $sql, array $params = [])` | `Promise<int>` | Execute and return last insert ID. |
 | `fetchOne(string $sql, array $params = [])` | `Promise<array\|null>` | First row or null. |
@@ -999,19 +1010,87 @@ All database exceptions extend `Hibla\Sql\Exceptions\SqlException`.
 
 ## Development
 
+### Requirements
+
+- Docker and Docker Compose
+- PHP 8.4+
+- Composer
+
+### Setup
+
 ```bash
 git clone https://github.com/hiblaphp/mysql.git
 cd mysql
 composer install
 ```
 
-```bash
-./vendor/bin/pest
-```
+### Running tests
+
+The test suite requires a running database. Each supported server has a dedicated
+Docker Compose service pair: one plain TCP and one SSL and a matching Composer
+script that sets the correct port environment variables before running Pest.
+
+**Start the database services you want to test against:**
 
 ```bash
-./vendor/bin/phpstan analyse
+# MySQL 8.0 (plain + SSL)
+docker compose up -d mysql mysql_ssl
+
+# MySQL 9.0 (plain + SSL)
+docker compose up -d mysql90 mysql90_ssl
+
+# MariaDB LTS (plain + SSL)
+docker compose up -d mariadb mariadb_ssl
 ```
+
+Wait for the containers to report healthy before running tests:
+
+```bash
+docker ps  # all target containers should show (healthy)
+```
+
+**Run the tests for a specific server:**
+
+```bash
+# MySQL 8.0  — connects to ports 3310 (plain) and 3307 (SSL)
+composer test:mysql
+
+# MySQL 9.0  — connects to ports 3313 (plain) and 3314 (SSL)
+composer test:mysql90
+
+# MariaDB LTS — connects to ports 3311 (plain) and 3308 (SSL)
+composer test:mariadb
+```
+
+**Tear down services when done:**
+
+```bash
+docker compose down -v
+```
+
+### Static analysis
+
+```bash
+composer analyze
+```
+
+### Code formatting
+
+```bash
+composer format
+```
+
+### Port reference
+
+| Service | Plain port | SSL port |
+|---|---|---|
+| MySQL 8.0 | 3310 | 3307 |
+| MySQL 9.0 | 3313 | 3314 |
+| MariaDB LTS | 3311 | 3308 |
+
+All ports are defined in `docker-compose.yml`. The Composer test scripts set
+`MYSQL_PORT` and `MYSQL_SSL_PORT` automatically and you do not need to export
+them manually unless you want to point the suite at an external server.
 
 ---
 
