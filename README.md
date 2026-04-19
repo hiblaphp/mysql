@@ -109,13 +109,7 @@ composer require hiblaphp/mysql
 ```
 
 **Requirements:**
- PHP 8.4+ 
- `hiblaphp/promise` | — 
-| `hiblaphp/event-loop` | — 
-| `hiblaphp/async` | — 
-| `hiblaphp/socket` | — 
-| `hiblaphp/sql` | — 
-| `rcalicdan/mysql-binary-protocol` | — 
+- PHP 8.4+ 
 
 **PHP extensions:**
 
