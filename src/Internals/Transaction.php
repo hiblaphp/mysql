@@ -127,7 +127,7 @@ class Transaction implements TransactionInterface
                 /** @var PreparedStatement $stmt */
                 [$stmt, $isCached] = $result;
 
-                $innerPromise = $stmt->executeStream(array_values($params), $bufferSize)
+                $innerPromise = $stmt->executeStream($params, $bufferSize)
                     ->then(function (MysqlRowStream $stream) use ($stmt, $isCached): MysqlRowStream {
                         if ($stream instanceof RowStream) {
                             if (! $isCached) {
