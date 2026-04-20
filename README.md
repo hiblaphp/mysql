@@ -764,7 +764,7 @@ Compression is negotiated at handshake time via the `CLIENT_COMPRESS` capability
 
 ## Query cancellation
 
-Server-side query cancellation is **disabled by default**. When disabled, `$promise->cancel()` transitions the promise to the cancelled state on the client side only — the MySQL server continues executing the query to completion and the connection remains checked out of the pool until it finishes.
+Server-side query cancellation is **disabled by default**. When disabled, `$promise->cancel()` transitions the promise to the cancelled state and stop execution on the client side only. The MySQL server continues executing the query to completion and the connection remains checked out of the pool until it finishes.
 
 Enable it explicitly for long-running queries where stopping server execution and releasing locks immediately has meaningful value:
 
