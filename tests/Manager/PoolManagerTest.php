@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Hibla\Mysql\Exceptions\PoolException;
 use Hibla\Mysql\Internals\Connection;
+use Hibla\Mysql\Internals\ConnectionSetup;
 use Hibla\Mysql\Manager\PoolManager;
 use Hibla\Socket\Connector;
 
@@ -733,6 +734,95 @@ describe('PoolManager', function (): void {
             expect($error)->toBeInstanceOf(PoolException::class);
 
             $conn->close();
+        });
+    });
+
+    describe('PoolManager Graceful Shutdown Edge Cases', function (): void {
+
+        it('rejects waiters that are still queued when active connections reach zero during closeAsync()', function (): void {
+
+            $pool = makePool(maxSize: 1);
+
+            $conn = await($pool->get());
+
+            $waiter = $pool->get();
+
+            $exception = null;
+            $waiter->then(null, function (Throwable $e) use (&$exception): void {
+                $exception = $e;
+            });
+
+            $shutdown = $pool->closeAsync();
+
+            $pool->release($conn);
+
+            await($shutdown);
+
+            await(delay(0));
+
+            expect($exception)->toBeInstanceOf(PoolException::class);
+        });
+    });
+
+    describe('onConnect Hook Edge Cases', function (): void {
+
+        it('can execute queries inside the onConnect hook via ConnectionSetupInterface', function (): void {
+
+            $pool = makeHookPool(
+                maxSize: 1,
+                onConnect: function (ConnectionSetup $setup) {
+                    await($setup->query("SET @app_name = 'hooked'"));
+                }
+            );
+
+            $conn = await($pool->get());
+
+            $result = await($conn->query('SELECT @app_name AS app_name'));
+            $appName = $result->fetchOne()['app_name'];
+
+            expect($appName)->toBe('hooked');
+
+            $pool->release($conn);
+            $pool->close();
+        });
+
+        it('does not rerun the onConnect hook on release when resetConnection is disabled', function (): void {
+            $callCount = 0;
+
+            $pool = makeHookPool(
+                maxSize: 1,
+                resetConnection: false,
+                onConnect: function () use (&$callCount): void {
+                    $callCount++;
+                }
+            );
+
+            $conn = await($pool->get());
+
+            $pool->release($conn);
+
+            await(delay(0.05));
+
+            expect($callCount)->toBe(1);
+
+            $pool->close();
+        });
+
+        it('drops the connection when the onConnect hook rejects during pool warm-up', function (): void {
+
+            $pool = makeHookPool(
+                maxSize: 2,
+                minSize: 2,
+                onConnect: function (): void {
+                    throw new RuntimeException('warm-up hook failure');
+                }
+            );
+
+            await(delay(0.1));
+
+            expect($pool->stats['active_connections'])->toBe(0);
+
+            $pool->close();
         });
     });
 });

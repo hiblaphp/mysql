@@ -330,7 +330,6 @@ class PoolManager
      * If no idle connection is available and the pool is not at capacity,
      * a new connection is created. Otherwise the caller is queued as a waiter.
      *
-     *
      * Waiter promises support cancellation and timeouts:
      * - If cancelled before connection acquisition, it is skipped.
      * - If acquireTimeout is set and exceeded, the promise rejects with TimeoutException.
@@ -494,6 +493,15 @@ class PoolManager
         }
 
         $this->isGracefulShutdown = true;
+
+        // Reject all pending waiters immediately, as no new work should begin.
+        $shuttingDownException = new PoolException('Pool is shutting down');
+        while (! $this->waiters->isEmpty()) {
+            $waiter = $this->waiters->dequeue();
+            if ($waiter->isPending()) {
+                $waiter->reject($shuttingDownException);
+            }
+        }
 
         while (! $this->pool->isEmpty()) {
             $connection = $this->pool->dequeue();
@@ -987,12 +995,6 @@ class PoolManager
      *
      * @return Promise<MysqlConnection>
      */
-    /**
-     * Creates a new connection and resolves the returned promise on success.
-     * Runs the onConnect hook before handing the connection to the caller.
-     *
-     * @return Promise<MysqlConnection>
-     */
     private function createNewConnection(): Promise
     {
         $this->activeConnections++;
@@ -1038,7 +1040,7 @@ class PoolManager
                             $promise->resolve($connection);
                         },
                         function (Throwable $e) use ($promise, $connection): void {
-                            $this->removeConnection($connection);
+                            $this->removeConnection($connection, false);
                             $promise->reject($e);
                         }
                     );
@@ -1103,7 +1105,7 @@ class PoolManager
                             $waiter->resolve($connection);
                         },
                         function (Throwable $e) use ($connection, $waiter): void {
-                            $this->removeConnection($connection);
+                            $this->removeConnection($connection, false);
                             $waiter->reject($e);
                         }
                     );
@@ -1161,7 +1163,7 @@ class PoolManager
      * After removing the connection, calls checkShutdownComplete() so that
      * any in-progress graceful shutdown can detect the drained state.
      */
-    private function removeConnection(MysqlConnection $connection): void
+    private function removeConnection(MysqlConnection $connection, bool $replenish = true): void
     {
         if (! $connection->isClosed()) {
             $connection->close();
@@ -1178,11 +1180,11 @@ class PoolManager
         $this->activeConnections--;
 
         // Only replenish during normal operation.
-        if (! $this->isClosing && ! $this->isGracefulShutdown) {
+        if ($replenish && ! $this->isClosing && ! $this->isGracefulShutdown) {
             $this->ensureMinConnections();
         }
 
-        // Always check — this call is a no-op when not in graceful shutdown.
+        // Always check and this call is a no-op when not in graceful shutdown.
         $this->checkShutdownComplete();
     }
 

@@ -186,7 +186,8 @@ describe('MysqlConfig', function (): void {
 
             expect($customSafeUri)->toContain('admin:***@')
                 ->and($customSafeUri)->not->toContain('secret-password')
-                ->and($customSafeUri)->toBe('mysql://admin:***@localhost');
+                ->and($customSafeUri)->toBe('mysql://admin:***@localhost')
+            ;
         });
     });
 });

@@ -665,12 +665,14 @@ describe('NameParamParser', function (): void {
     it('handles a whitespace-only query', function (): void {
         [$sql, $map] = NameParamParser::parse('   ');
         expect($sql)->toBe('   ')
-            ->and($map)->toBe([]);
+            ->and($map)->toBe([])
+        ;
     });
 
     it('handles tab characters between tokens', function (): void {
         [$sql, $map] = NameParamParser::parse("SELECT\t*\tFROM\tt\tWHERE\tid\t=\t:id");
         expect($sql)->toBe("SELECT\t*\tFROM\tt\tWHERE\tid\t=\t?")
-            ->and($map)->toBe([0 => 'id']);
+            ->and($map)->toBe([0 => 'id'])
+        ;
     });
 });

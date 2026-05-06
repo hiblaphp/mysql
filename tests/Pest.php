@@ -182,6 +182,27 @@ function makePool(int $maxSize = 5, int $idleTimeout = 300, int $maxLifetime = 3
     );
 }
 
+function makeHookPool(
+    int $maxSize = 1,
+    int $minSize = 0,
+    bool $resetConnection = false,
+    ?callable $onConnect = null
+): PoolManager {
+    return new PoolManager(
+        config: [
+            'host' => $_ENV['MYSQL_HOST'] ?? '127.0.0.1',
+            'port' => (int) ($_ENV['MYSQL_PORT'] ?? 3310),
+            'database' => $_ENV['MYSQL_DATABASE'] ?? 'test',
+            'username' => $_ENV['MYSQL_USERNAME'] ?? 'test_user',
+            'password' => $_ENV['MYSQL_PASSWORD'] ?? 'test_password',
+            'reset_connection' => $resetConnection,
+        ],
+        maxSize: $maxSize,
+        minSize: $minSize,
+        onConnect: $onConnect
+    );
+}
+
 function makeClient(
     int $maxConnections = 5,
     int $idleTimeout = 300,
