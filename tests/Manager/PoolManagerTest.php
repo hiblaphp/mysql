@@ -9,6 +9,7 @@ use Hibla\Mysql\Manager\PoolManager;
 use Hibla\Socket\Connector;
 
 use function Hibla\await;
+use function Hibla\delay;
 use function Hibla\sleep;
 
 describe('PoolManager', function (): void {
