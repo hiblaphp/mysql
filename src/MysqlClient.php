@@ -406,6 +406,12 @@ final class MysqlClient implements SqlClientInterface
                         return $value !== false ? $value : null;
                     }
 
+                    if (\is_int($column)) {
+                        $values = array_values($row);
+
+                        return $values[$column] ?? null;
+                    }
+
                     return $row[$column] ?? null;
                 })
         );

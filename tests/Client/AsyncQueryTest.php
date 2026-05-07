@@ -10,9 +10,9 @@ beforeAll(function (): void {
     $client = makeConcurrentClient();
 
     await($client->query('CREATE TABLE IF NOT EXISTS concurrent_test (
-        id         INT AUTO_INCREMENT PRIMARY KEY,
-        worker     INT,
-        value      VARCHAR(100),
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        worker INT,
+        value VARCHAR(100),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )'));
 
@@ -476,7 +476,7 @@ describe('Concurrent Query Execution', function (): void {
             $stats = $client->stats;
 
             expect($stats['waiting_requests'])->toBe(0)
-                ->and($stats['pooled_connections'])->toBe($stats['active_connections'])
+                ->and($stats['pooled_connections'])->toBe($stats['total_connections'])
             ;
 
             $client->close();

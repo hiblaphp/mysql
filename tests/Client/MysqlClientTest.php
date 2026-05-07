@@ -425,12 +425,12 @@ describe('MysqlClient', function (): void {
             }
         });
 
-        it('returns null for a numeric index because fetchOne returns associative arrays only', function (): void {
+        it('returns the value at the specified numeric index', function (): void {
             $client = makeClient();
 
             try {
                 $value = await($client->fetchValue('SELECT 42 AS answer', 0));
-                expect($value)->toBeNull();
+                expect((int) $value)->toBe(42);
             } finally {
                 $client->close();
             }

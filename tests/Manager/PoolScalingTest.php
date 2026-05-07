@@ -17,12 +17,12 @@ describe('Pool Scaling and Capacity', function (): void {
 
         $attempts = 0;
 
-        while ($pool->stats['active_connections'] < 3 && $attempts < 30) {
+        while ($pool->stats['total_connections'] < 3 && $attempts < 30) {
             await(delay(0.1));
             $attempts++;
         }
 
-        expect($pool->stats['active_connections'])->toBe(3);
+        expect($pool->stats['total_connections'])->toBe(3);
         $pool->close();
     });
 
@@ -136,12 +136,12 @@ describe('Pool Scaling and Capacity', function (): void {
         $pool->release($c1);
 
         $attempts = 0;
-        while ($pool->stats['active_connections'] < 2 && $attempts < 30) {
+        while ($pool->stats['total_connections'] < 2 && $attempts < 30) {
             await(delay(0.1));
             $attempts++;
         }
 
-        expect($pool->stats['active_connections'])->toBe(2);
+        expect($pool->stats['total_connections'])->toBe(2);
 
         $pool->close();
     });
@@ -229,7 +229,7 @@ describe('Pool Scaling and Capacity', function (): void {
         await($client->query('SELECT 1'));
         await($client->query('SELECT 1'));
 
-        expect($client->stats['active_connections'])->toBe(1);
+        expect($client->stats['total_connections'])->toBe(1);
         expect($client->stats['pooled_connections'])->toBe(1);
         $client->close();
     });
@@ -350,7 +350,7 @@ describe('Pool Scaling and Capacity', function (): void {
 
         await(Promise::all($promises));
 
-        expect($client->stats['active_connections'])->toBe(10);
+        expect($client->stats['total_connections'])->toBe(10);
         expect($client->stats['pooled_connections'])->toBe(10);
 
         $client->close();
@@ -384,7 +384,7 @@ describe('Pool Scaling and Capacity', function (): void {
         }
 
         $stats = $client->stats;
-        expect($stats['active_connections'])->toBe(2);
+        expect($stats['total_connections'])->toBe(2);
 
         unset($client);
     });
@@ -442,7 +442,7 @@ describe('Pool Scaling and Capacity', function (): void {
         }
 
         await(Promise::all($promises));
-        expect($client->stats['active_connections'])->toBe(5);
+        expect($client->stats['total_connections'])->toBe(5);
 
         $client->close();
     });

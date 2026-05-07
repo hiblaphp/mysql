@@ -330,7 +330,7 @@ describe('PoolManager', function (): void {
 
             $pool->release($conn1);
 
-            expect($pool->stats['active_connections'])->toBe(2)
+            expect($pool->stats['total_connections'])->toBe(2)
                 ->and($pool->stats['pooled_connections'])->toBe(1)
             ;
 
@@ -535,7 +535,7 @@ describe('PoolManager', function (): void {
                 $pool->release($conn);
             }
 
-            expect($pool->stats['active_connections'])->toBe(1)
+            expect($pool->stats['total_connections'])->toBe(1)
                 ->and($pool->stats['pooled_connections'])->toBe(1)
             ;
 

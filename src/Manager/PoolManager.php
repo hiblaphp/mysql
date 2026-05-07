@@ -296,7 +296,8 @@ class PoolManager
     public array $stats {
         get {
             return [
-                'active_connections' => $this->activeConnections,
+                'active_connections' => \count($this->activeConnectionsMap),
+                'total_connections' => $this->activeConnections,
                 'pooled_connections' => $this->pool->count(),
                 'min_size' => $this->minSize,
                 'waiting_requests' => $this->pendingWaitersCount,

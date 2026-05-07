@@ -311,7 +311,8 @@ describe('Pool Query Cancellation Integration', function (): void {
         $stats = $pool->stats;
 
         expect($stats['pooled_connections'])->toBe(2)
-            ->and($stats['active_connections'])->toBe(2)
+            ->and($stats['total_connections'])->toBe(2)
+            ->and($stats['active_connections'])->toBe(0)
             ->and($stats['draining_connections'])->toBe(0)
             ->and($stats['waiting_requests'])->toBe(0)
         ;
