@@ -677,7 +677,7 @@ class Connection
                 Connection::create($this->params, $this->connector)
                     ->then(function (Connection $killConn) use ($threadId): PromiseInterface {
                         return $killConn->query("KILL QUERY {$threadId}")
-                            ->finally(fn () => $killConn->close())
+                            ->finally(fn() => $killConn->close())
                         ;
                     }),
                 $this->params->killTimeoutSeconds
@@ -923,7 +923,10 @@ class Connection
 
     private function finishCommand(): void
     {
-        $this->state = ConnectionState::READY;
+        if ($this->state !== ConnectionState::CLOSED) {
+            $this->state = ConnectionState::READY;
+        }
+        
         $this->currentCommand = null;
         $this->processNextCommand();
     }
