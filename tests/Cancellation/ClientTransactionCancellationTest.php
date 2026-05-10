@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Hibla\EventLoop\Loop;
 use Hibla\Promise\Exceptions\CancelledException;
+use Hibla\Sql\Exceptions\TransactionException;
 
 use function Hibla\await;
 use function Hibla\sleep;
@@ -137,7 +138,7 @@ describe('Transaction Prepared Query Cancellation', function (): void {
         $client->close();
     });
 
-    it('allows further inserts and commit after cancelling a prepared query inside a transaction', function (): void {
+    it('rejects further inserts and requires rollback after cancelling a prepared query inside a transaction', function (): void {
         $client = makeTransactionClient(enableServerSideCancellation: true);
 
         $tx = await($client->beginTransaction());
@@ -155,19 +156,47 @@ describe('Transaction Prepared Query Cancellation', function (): void {
             // expected
         }
 
-        if ($tx->isActive()) {
-            await($tx->query('INSERT INTO client_cancel_test (value) VALUES (?)', ['after_cancel']));
-            await($tx->commit());
+        expect(fn () => await($tx->query('INSERT INTO client_cancel_test (value) VALUES (?)', ['after_cancel'])))
+            ->toThrow(TransactionException::class)
+        ;
+
+        expect(fn () => await($tx->commit()))
+            ->toThrow(TransactionException::class)
+        ;
+
+        await($tx->rollback());
+
+        $client->close();
+    });
+
+    it('discards all rows when forced to rollback after prepared query cancellation', function (): void {
+        $client = makeTransactionClient(enableServerSideCancellation: true);
+
+        $tx = await($client->beginTransaction());
+        await($tx->query('INSERT INTO client_cancel_test (value) VALUES (?)', ['prepared_row1']));
+
+        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(?)', [5]);
+
+        Loop::addTimer(0.1, function () use ($slowPromise): void {
+            $slowPromise->cancel();
+        });
+
+        try {
+            await($slowPromise);
+        } catch (CancelledException) {
+            // expected
         }
+
+        await($tx->rollback());
 
         $result = await($client->query('SELECT COUNT(*) as count FROM client_cancel_test'));
         $count = (int) $result->fetchOne()['count'];
-        expect($count)->toBeGreaterThanOrEqual(2);
+        expect($count)->toBe(0);
 
         $client->close();
     });
 
-    it('persists only the pre-cancel and post-cancel rows after commit following prepared query cancellation', function (): void {
+    test('pool connection is healthy after cancellation and rollback of a prepared transaction query', function (): void {
         $client = makeTransactionClient(enableServerSideCancellation: true);
 
         $tx = await($client->beginTransaction());
@@ -185,44 +214,7 @@ describe('Transaction Prepared Query Cancellation', function (): void {
             // expected
         }
 
-        if ($tx->isActive()) {
-            await($tx->query('INSERT INTO client_cancel_test (value) VALUES (?)', ['after_cancel']));
-            await($tx->commit());
-        }
-
-        $rows = await($client->query('SELECT value FROM client_cancel_test ORDER BY id'));
-        $values = array_column($rows->fetchAll(), 'value');
-
-        expect($values)->toContain('prepared_row1')
-            ->and($values)->toContain('after_cancel')
-            ->and($values)->not->toContain('')
-        ;
-
-        $client->close();
-    });
-
-    test('pool connection is healthy after cancellation and commit of a prepared transaction query', function (): void {
-        $client = makeTransactionClient(enableServerSideCancellation: true);
-
-        $tx = await($client->beginTransaction());
-        await($tx->query('INSERT INTO client_cancel_test (value) VALUES (?)', ['prepared_row1']));
-
-        $slowPromise = $tx->query('INSERT INTO client_cancel_test (value) SELECT SLEEP(?)', [5]);
-
-        Loop::addTimer(0.1, function () use ($slowPromise): void {
-            $slowPromise->cancel();
-        });
-
-        try {
-            await($slowPromise);
-        } catch (CancelledException) {
-            // expected
-        }
-
-        if ($tx->isActive()) {
-            await($tx->query('INSERT INTO client_cancel_test (value) VALUES (?)', ['after_cancel']));
-            await($tx->commit());
-        }
+        await($tx->rollback());
 
         $result = await($client->query('SELECT "Alive" AS status'));
         expect($result->fetchOne()['status'])->toBe('Alive');
@@ -255,7 +247,7 @@ describe('Transaction Stream Cancellation', function (): void {
         $client->close();
     });
 
-    it('allows a query inside the transaction after cancelling a stream', function (): void {
+    it('rejects further queries inside the transaction after cancelling a stream', function (): void {
         $client = makeTransactionClient(enableServerSideCancellation: true);
 
         $tx = await($client->beginTransaction());
@@ -273,13 +265,11 @@ describe('Transaction Stream Cancellation', function (): void {
             // expected
         }
 
-        if ($tx->isActive()) {
-            $result = await($tx->query('SELECT COUNT(*) as count FROM client_cancel_test'));
-            $txCount = (int) $result->fetchOne()['count'];
-            expect($txCount)->toBeGreaterThanOrEqual(3);
+        expect(fn () => await($tx->query('SELECT COUNT(*) as count FROM client_cancel_test')))
+            ->toThrow(TransactionException::class)
+        ;
 
-            await($tx->rollback());
-        }
+        await($tx->rollback());
 
         $client->close();
     });

@@ -581,33 +581,48 @@ final class MysqlClient implements SqlClientInterface
     ): PromiseInterface {
         $options ??= TransactionOptions::default();
 
-        return async(function () use ($callback, $options) {
+        /** @var TransactionInterface|null $activeTx */
+        $activeTx = null;
+
+        $fiberPromise = async(function () use ($callback, $options, &$activeTx) {
             $lastError = null;
 
             for ($attempt = 1; $attempt <= $options->attempts; $attempt++) {
-                $tx = null;
-
                 try {
-                    /** @var TransactionInterface $tx */
-                    $tx = await($this->beginTransaction($options->isolationLevel));
+                    $activeTx = await($this->beginTransaction($options->isolationLevel));
 
-                    $result = await(async(fn () => $callback($tx)));
+                    $innerWorkPromise = async(fn () => $callback($activeTx));
+                    $result = await($innerWorkPromise);
 
-                    await($tx->commit());
+                    await($activeTx->commit());
 
                     return $result;
                 } catch (\Throwable $e) {
                     $lastError = $e;
 
-                    if ($tx !== null && $tx->isActive()) {
+                    // When the outer transaction() promise is cancelled, async() injects
+                    // CancelledException into this fiber. It must be explicitly cancel
+                    // the inner work promise so it stops processing.
+                    if (
+                        $e instanceof \Hibla\Promise\Exceptions\CancelledException
+                        && isset($innerWorkPromise)
+                        && ! $innerWorkPromise->isSettled()
+                    ) {
+                        $innerWorkPromise->cancel();
+                    }
+
+                    if ($activeTx !== null && $activeTx->isActive()) {
                         try {
-                            await($tx->rollback());
+                            // Interrupt any hanging query so the wire is free for ROLLBACK
+                            if ($activeTx instanceof Transaction) {
+                                $activeTx->forceCancelCurrentQuery();
+                            }
+                            await($activeTx->rollback());
                         } catch (\Throwable) {
                             // Ignore rollback failures — the original error is more useful.
                         }
                     }
 
-                    // If this was the last attempt, stop immediately.
                     if ($attempt === $options->attempts) {
                         break;
                     }
@@ -617,11 +632,21 @@ final class MysqlClient implements SqlClientInterface
                     if (! $options->shouldRetry($e)) {
                         throw $e;
                     }
+                } finally {
+                    $activeTx = null;
                 }
             }
 
             throw $lastError ?? new \RuntimeException('Transaction failed with no recorded error.');
         });
+
+        $fiberPromise->onCancel(function () use (&$activeTx) {
+            if ($activeTx instanceof Transaction && $activeTx->isActive()) {
+                $activeTx->forceCancelCurrentQuery();
+            }
+        });
+
+        return $this->withCancellation($fiberPromise);
     }
 
     /**

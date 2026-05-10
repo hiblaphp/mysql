@@ -232,15 +232,14 @@ describe('MysqlClient Transaction', function (): void {
             $client->close();
         });
 
-        it('throws TransactionException when rolling back an already rolled back transaction', function (): void {
+        it('calling rollback() twice is idempotent and does not throw', function (): void {
             $client = makeTransactionClient();
             $tx = await($client->beginTransaction());
 
             await($tx->rollback());
+            await($tx->rollback());
 
-            expect(fn () => await($tx->rollback()))
-                ->toThrow(TransactionException::class)
-            ;
+            expect($tx->isActive())->toBeFalse();
 
             $client->close();
         });

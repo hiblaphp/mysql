@@ -42,7 +42,8 @@ class Transaction implements TransactionInterface
     /**
      * If a query fails mid-transaction, the transaction becomes "tainted".
      * MySQL may allow further queries, but it is dangerous and can lead to
-     * partial commits depending on the storage engine. We enforce a strict failure state.
+     * partial commits depending on the storage engine or implicit commits.
+     * We enforce a strict failure state requiring an explicit ROLLBACK.
      */
     private bool $failed = false;
 
@@ -117,7 +118,18 @@ class Transaction implements TransactionInterface
         if (\count($params) === 0) {
             $promise = $this->connection->streamQuery($sql, $bufferSize);
 
-            return $this->withCancellation($this->trackErrorState($promise));
+            // Track taint state from both the outer borrow promise (pre-first-row errors
+            // and outer cancellations) and the inner command promise (mid-iteration errors
+            // and $stream->cancel() calls inside a foreach loop).
+            $tracked = $this->trackErrorState($promise)->then(
+                function (MysqlRowStream $stream): MysqlRowStream {
+                    $this->bindStreamErrorState($stream);
+
+                    return $stream;
+                }
+            );
+
+            return $this->withCancellation($tracked);
         }
 
         $innerPromise = null;
@@ -130,6 +142,11 @@ class Transaction implements TransactionInterface
                 $innerPromise = $stmt->executeStream($params, $bufferSize)
                     ->then(function (MysqlRowStream $stream) use ($stmt, $isCached): MysqlRowStream {
                         if ($stream instanceof RowStream) {
+                            // Hook into mid-iteration errors/cancellations before registering
+                            // the statement-close callback so both share the same underlying
+                            // command promise without ordering dependencies.
+                            $this->bindStreamErrorState($stream);
+
                             if (! $isCached) {
                                 $stream->waitForCommand()->finally($stmt->close(...));
                             }
@@ -151,6 +168,11 @@ class Transaction implements TransactionInterface
     /**
      * {@inheritdoc}
      *
+     * The $onStreamError closure passed to TransactionPreparedStatement lets it
+     * taint this transaction when a stream returned by the statement is cancelled
+     * or errors out mid-iteration — a lifecycle event that occurs entirely outside
+     * the promise chain this Transaction can observe directly.
+     *
      * @return PromiseInterface<PreparedStatementInterface>
      */
     public function prepare(string $sql): PromiseInterface
@@ -159,9 +181,13 @@ class Transaction implements TransactionInterface
 
         $innerPromise = $this->connection->prepare($sql);
 
+        $onStreamError = function (): void {
+            $this->failed = true;
+        };
+
         $promise = $innerPromise->then(
-            function (PreparedStatementInterface $stmt) {
-                return new TransactionPreparedStatement($stmt, $this->connection);
+            function (PreparedStatementInterface $stmt) use ($onStreamError) {
+                return new TransactionPreparedStatement($stmt, $this->connection, $onStreamError);
             }
         );
 
@@ -176,8 +202,7 @@ class Transaction implements TransactionInterface
     public function execute(string $sql, array $params = []): PromiseInterface
     {
         return $this->withCancellation(
-            $this->query($sql, $params)
-                ->then(fn (ResultInterface $result) => $result->affectedRows)
+            $this->query($sql, $params)->then(fn (ResultInterface $result) => $result->affectedRows)
         );
     }
 
@@ -187,8 +212,16 @@ class Transaction implements TransactionInterface
     public function executeGetId(string $sql, array $params = []): PromiseInterface
     {
         return $this->withCancellation(
-            $this->query($sql, $params)
-                ->then(fn (ResultInterface $result) => $result->lastInsertId)
+            $this->query($sql, $params)->then(function (ResultInterface $result) {
+                $row = $result->fetchOne();
+                if ($row !== null && \count($row) > 0) {
+                    $val = reset($row);
+
+                    return \is_scalar($val) ? (int) $val : 0;
+                }
+
+                return $result->lastInsertId;
+            })
         );
     }
 
@@ -198,8 +231,7 @@ class Transaction implements TransactionInterface
     public function fetchOne(string $sql, array $params = []): PromiseInterface
     {
         return $this->withCancellation(
-            $this->query($sql, $params)
-                ->then(fn (ResultInterface $result) => $result->fetchOne())
+            $this->query($sql, $params)->then(fn (ResultInterface $result) => $result->fetchOne())
         );
     }
 
@@ -223,6 +255,12 @@ class Transaction implements TransactionInterface
                         return $value !== false ? $value : null;
                     }
 
+                    if (\is_int($column)) {
+                        $values = array_values($row);
+
+                        return $values[$column] ?? null;
+                    }
+
                     return $row[$column] ?? null;
                 })
         );
@@ -233,7 +271,7 @@ class Transaction implements TransactionInterface
      */
     public function onCommit(callable $callback): void
     {
-        $this->ensureActive(); // Callbacks can be added even if tainted, before rollback
+        $this->ensureActive();
         $this->onCommitCallbacks[] = $callback;
     }
 
@@ -249,10 +287,16 @@ class Transaction implements TransactionInterface
     /**
      * {@inheritdoc}
      *
-     * NOTE: withCancellation() is intentionally NOT applied to commit().
-     * Dispatching KILL QUERY against a COMMIT would leave the transaction
-     * in an undefined state on the server. This operation must be allowed
-     * to complete or fail on its own terms.
+     * NOTE: This method is intentionally shielded from user cancellations.
+     * Cancelling a COMMIT mid-flight would leave the transaction in an undefined
+     * state on the server. The `shield()` wrapper guarantees the COMMIT query
+     * finishes and its `finally()` block safely releases the connection, even if
+     * the caller cancels the returned promise.
+     *
+     * NOTE: `$this->active` is set to false inside the query callbacks rather
+     * than before the query is dispatched. This ensures that if the server rejects
+     * COMMIT (e.g. connection dropped), the user can still invoke rollback() to
+     * cleanly close out the transaction and release the connection.
      *
      * @return PromiseInterface<void>
      */
@@ -269,15 +313,22 @@ class Transaction implements TransactionInterface
             );
         }
 
-        $this->active = false;
-
-        return $this->connection->query('COMMIT')
+        $promise = $this->connection->query('COMMIT')
             ->then(
                 function (): void {
+                    // Only mark inactive on confirmed success so that a rejected
+                    // COMMIT still allows rollback() to run and release cleanly.
+                    $this->active = false;
                     $this->executeCallbacks($this->onCommitCallbacks);
                     $this->onRollbackCallbacks = [];
                 },
                 function (\Throwable $e): never {
+                    // COMMIT was rejected by the server. Mark the transaction as
+                    // failed and inactive so neither commit() nor query() can be
+                    // retried on a connection whose state is now undefined.
+                    $this->active = false;
+                    $this->failed = true;
+
                     throw new TransactionException(
                         'Failed to commit transaction: ' . $e->getMessage(),
                         (int) $e->getCode(),
@@ -287,25 +338,60 @@ class Transaction implements TransactionInterface
             )
             ->finally($this->releaseConnection(...))
         ;
+
+        return $this->shield($promise);
     }
 
     /**
      * {@inheritdoc}
      *
-     * NOTE: withCancellation() is intentionally NOT applied to rollback().
-     * Dispatching KILL QUERY against a ROLLBACK would leave the transaction
-     * in an undefined state on the server. This operation must be allowed
-     * to complete or fail on its own terms.
+     * NOTE: This method is shielded for the same reason as `commit()`.
+     * Dispatching a KILL QUERY against a ROLLBACK leaves the server state undefined.
+     *
+     * NOTE: rollback() is idempotent — calling it on an already-rolled-back or
+     * already-committed transaction silently returns a resolved promise rather than
+     * throwing. This allows callers to safely place rollback() in finally blocks.
+     *
+     * NOTE: When the underlying connection has been closed (e.g. via the opt-out
+     * cancellation path where enableServerSideCancellation is false), rollback()
+     * cannot send ROLLBACK to the server. It still releases the (now-closed)
+     * connection back to the pool so the pool's activeConnections counter is
+     * decremented and queued waiters can be served.
+     *
+     * NOTE: When a query was recently cancelled via KILL QUERY (wasQueryCancelled=true),
+     * releaseConnection() is called synchronously BEFORE awaiting the ROLLBACK promise.
+     * This immediately decrements `active_connections` so stats are correct even if
+     * the await is interrupted. The pool safely routes this connection to `DO SLEEP(0)`
+     * to absorb the stale KILL flag while the queued ROLLBACK finishes.
      *
      * @return PromiseInterface<void>
      */
     public function rollback(): PromiseInterface
     {
-        $this->ensureActive();
+        // Idempotency guard: already committed, rolled back, or otherwise closed.
+        if (! $this->active) {
+            return Promise::resolved();
+        }
+
+        // Opt-out cancellation path: the connection was closed because a query
+        // was cancelled without side-channel kills enabled. The connection is dead,
+        // but we must still release it to decrement the pool's active count.
+        if ($this->connection->isClosed()) {
+            $this->active = false;
+            $this->failed = false;
+            $this->releaseConnection();
+
+            return Promise::resolved();
+        }
+
+        // Interrupt any running query so the wire is free to receive the ROLLBACK immediately.
+        // This bridges the gap when the Fiber is killed but the underlying query promise is orphaned.
+        $this->connection->cancelCurrentCommand();
+
         $this->active = false;
         $this->failed = false;
 
-        return $this->connection->query('ROLLBACK')
+        $promise = $this->connection->query('ROLLBACK')
             ->then(
                 function (): void {
                     $this->executeCallbacks($this->onRollbackCallbacks);
@@ -319,8 +405,18 @@ class Transaction implements TransactionInterface
                     );
                 }
             )
-            ->finally($this->releaseConnection(...))
         ;
+
+        // KILL QUERY path: release synchronously so pool stats are correct immediately.
+        if ($this->connection->wasQueryCancelled()) {
+            $this->releaseConnection();
+
+            return $this->shield($promise);
+        }
+
+        // Normal path: release only after ROLLBACK completes to prevent a dirty
+        // connection from being parked in the idle pool.
+        return $this->shield($promise->finally($this->releaseConnection(...)));
     }
 
     /**
@@ -343,7 +439,7 @@ class Transaction implements TransactionInterface
             }
         );
 
-        return $this->trackErrorState($promise);
+        return $this->withCancellation($this->trackErrorState($promise));
     }
 
     /**
@@ -359,7 +455,7 @@ class Transaction implements TransactionInterface
         // Rolling back to a savepoint potentially clears the failed state for operations after that savepoint
         $this->failed = false;
 
-        return $this->connection->query("ROLLBACK TO SAVEPOINT {$escaped}")->catch(
+        $promise = $this->connection->query("ROLLBACK TO SAVEPOINT {$escaped}")->catch(
             function (\Throwable $e) use ($identifier): never {
                 $this->failed = true; // If rollback fails, the whole transaction is dead
 
@@ -370,6 +466,8 @@ class Transaction implements TransactionInterface
                 );
             }
         );
+
+        return $this->withCancellation($promise);
     }
 
     /**
@@ -392,7 +490,7 @@ class Transaction implements TransactionInterface
             }
         );
 
-        return $this->trackErrorState($promise);
+        return $this->withCancellation($this->trackErrorState($promise));
     }
 
     /**
@@ -412,7 +510,24 @@ class Transaction implements TransactionInterface
     }
 
     /**
-     * Tracks the state of the promise. If it rejects, the transaction is marked as failed.
+     * Force-cancels any running query on the connection.
+     * Call this before rollback() if the transaction fiber was killed.
+     */
+    public function forceCancelCurrentQuery(): void
+    {
+        if (! $this->connection->isClosed()) {
+            $this->connection->cancelCurrentCommand();
+        }
+    }
+
+    /**
+     * Wraps a promise so that any rejection or cancellation marks the transaction
+     * as failed, enforcing strict state management for MySQL transactions.
+     *
+     * Cancellation is handled separately via onCancel() because cancelled promises
+     * short-circuit the chain before .catch() handlers fire. Without the onCancel
+     * hook, cancelling a query promise would successfully send KILL QUERY, but
+     * `$this->failed` would remain false.
      *
      * @template T
      *
@@ -422,11 +537,48 @@ class Transaction implements TransactionInterface
      */
     private function trackErrorState(PromiseInterface $promise): PromiseInterface
     {
+        $promise->onCancel(function (): void {
+            $this->failed = true;
+        });
+
         return $promise->catch(function (\Throwable $e) {
             $this->failed = true;
 
             throw $e;
         });
+    }
+
+    /**
+     * Hooks into a RowStream to taint the transaction if the stream is cancelled
+     * or errors out during mid-iteration consumption.
+     *
+     * Two complementary hooks are registered:
+     *
+     *   1. $stream->onCancel() — fires unconditionally whenever $stream->cancel()
+     *      is called, even when the command promise is already settled (i.e. all rows
+     *      arrived in one chunk before iteration started).
+     *
+     *   2. commandPromise onCancel / catch — fires when the server-side command is
+     *      cancelled or errors out asynchronously. Only registered when the command promise
+     *      is still pending to avoid redundant no-op registrations.
+     *
+     * @param RowStream $stream The already-resolved stream whose lifecycle to observe.
+     */
+    private function bindStreamErrorState(RowStream $stream): void
+    {
+        $stream->onCancel(function (): void {
+            $this->failed = true;
+        });
+
+        $cmd = $stream->waitForCommand();
+        if (! $cmd->isSettled()) {
+            $cmd->onCancel(function (): void {
+                $this->failed = true;
+            });
+            $cmd->catch(function (): void {
+                $this->failed = true;
+            });
+        }
     }
 
     /**
@@ -525,7 +677,7 @@ class Transaction implements TransactionInterface
      * Destructor ensures the connection is released safely.
      *
      * If the transaction was not explicitly committed or rolled back (e.g. an exception
-     * was thrown and the variable went out of scope), it issue an asynchronous
+     * was thrown and the variable went out of scope), it issues an asynchronous
      * fire-and-forget ROLLBACK to clear the session state before returning the
      * connection to the pool.
      */
@@ -533,7 +685,6 @@ class Transaction implements TransactionInterface
     {
         if ($this->active && ! $this->connection->isClosed() && ! $this->released) {
             $this->active = false;
-
             $this->connection->query('ROLLBACK')->finally($this->releaseConnection(...));
         } elseif (! $this->released) {
             $this->releaseConnection();

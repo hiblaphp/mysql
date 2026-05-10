@@ -31,7 +31,8 @@ class TransactionPreparedStatement implements PreparedStatementInterface
 
     public function __construct(
         private readonly PreparedStatementInterface $statement,
-        private readonly Connection $connection
+        private readonly Connection $connection,
+        private readonly ?\Closure $onStreamError = null,
     ) {
     }
 
@@ -57,6 +58,28 @@ class TransactionPreparedStatement implements PreparedStatementInterface
     {
         /** @var PromiseInterface<MysqlRowStream> $promise */
         $promise = $this->statement->executeStream($params);
+
+        if ($this->onStreamError !== null) {
+            $onStreamError = $this->onStreamError;
+
+            $promise = $promise->then(
+                function (MysqlRowStream $stream) use ($onStreamError): MysqlRowStream {
+                    if ($stream instanceof RowStream) {
+                        $stream->onCancel($onStreamError);
+
+                        $cmd = $stream->waitForCommand();
+                        if (! $cmd->isSettled()) {
+                            $cmd->onCancel($onStreamError);
+                            $cmd->catch(static function () use ($onStreamError): void {
+                                $onStreamError();
+                            });
+                        }
+                    }
+
+                    return $stream;
+                }
+            );
+        }
 
         return $this->withCancellation($promise);
     }

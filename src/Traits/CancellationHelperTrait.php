@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hibla\Mysql\Traits;
 
 use Hibla\Promise\Interfaces\PromiseInterface;
+use Hibla\Promise\Promise;
 
 /**
  * Provides helper methods for propagating promise cancellations.
@@ -53,5 +54,40 @@ trait CancellationHelperTrait
                 $innerPromise->cancelChain();
             }
         });
+    }
+
+    /**
+     * Shields an internal promise from cancellation.
+     *
+     * Returns a new promise that mirrors the internal promise's outcome.
+     * If the returned promise is cancelled by the user, the cancellation
+     * DOES NOT propagate to the internal promise. The internal promise will
+     * safely run to completion, ensuring finally() blocks execute.
+     *
+     * @template T
+     *
+     * @param PromiseInterface<T> $internalPromise
+     *
+     * @return PromiseInterface<T>
+     */
+    private function shield(PromiseInterface $internalPromise): PromiseInterface
+    {
+        /** @var Promise<T> $userPromise */
+        $userPromise = new Promise();
+
+        $internalPromise->then(
+            static function (mixed $v) use ($userPromise): void {
+                if ($userPromise->isPending()) {
+                    $userPromise->resolve($v);
+                }
+            },
+            static function (\Throwable $e) use ($userPromise): void {
+                if ($userPromise->isPending()) {
+                    $userPromise->reject($e);
+                }
+            }
+        );
+
+        return $userPromise;
     }
 }

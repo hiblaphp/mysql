@@ -56,6 +56,11 @@ class RowStream implements MysqlRowStream
      */
     private ?\Closure $onBackpressure = null;
 
+    /**
+     * @var \Closure(): void|null
+     */
+    private ?\Closure $onCancelCallback = null;
+
     private ?StreamStats $internalStats = null;
 
     private ?Throwable $error = null;
@@ -120,24 +125,29 @@ class RowStream implements MysqlRowStream
         }
     }
 
-     public function __construct(int $bufferSize = self::DEFAULT_BUFFER_SIZE)
-     {
-         if ($bufferSize < 1) {
-             throw new \InvalidArgumentException('Buffer size must be at least 1');
-         }
+    public function __construct(int $bufferSize = self::DEFAULT_BUFFER_SIZE)
+    {
+        if ($bufferSize < 1) {
+            throw new \InvalidArgumentException('Buffer size must be at least 1');
+        }
 
-         $this->maxBufferSize = $bufferSize;
-         // Ensure the resume threshold is always at least 1 to prevent infinite pauses
-         $this->resumeThreshold = max(1, (int) ($bufferSize / 2));
+        $this->maxBufferSize = $bufferSize;
+        // Ensure the resume threshold is always at least 1 to prevent infinite pauses
+        $this->resumeThreshold = max(1, (int) ($bufferSize / 2));
 
-         /** @var SplQueue<array<string, mixed>> $buffer */
-         $buffer = new SplQueue();
-         $this->buffer = $buffer;
+        /** @var SplQueue<array<string, mixed>> $buffer */
+        $buffer = new SplQueue();
+        $this->buffer = $buffer;
 
-         /** @var Promise<void> $lifecyclePromise */
-         $lifecyclePromise = new Promise();
-         $this->internalLifecyclePromise = $lifecyclePromise;
-     }
+        /** @var Promise<void> $lifecyclePromise */
+        $lifecyclePromise = new Promise();
+        $this->internalLifecyclePromise = $lifecyclePromise;
+    }
+
+    public function onCancel(\Closure $callback): void
+    {
+        $this->onCancelCallback = $callback;
+    }
 
     /**
      * Iterates over the rows.
@@ -193,6 +203,12 @@ class RowStream implements MysqlRowStream
 
         $this->cancelled = true;
         $this->error = new CancelledException('Stream was cancelled');
+
+        // Fire the user-level cancel callback first and unconditionally.
+        if ($this->onCancelCallback !== null) {
+            ($this->onCancelCallback)();
+            $this->onCancelCallback = null;
+        }
 
         if (! $this->completed) {
             $this->completed = true;

@@ -51,6 +51,9 @@ function makeTxMocks(): array
 
     $conn->shouldReceive('isClosed')->andReturn(false)->byDefault();
 
+    $conn->shouldReceive('cancelCurrentCommand')->byDefault();
+    $conn->shouldReceive('wasQueryCancelled')->andReturn(false)->byDefault();
+
     $conn->shouldReceive('query')
         ->with('ROLLBACK')
         ->andReturn(Promise::resolved(new Result()))

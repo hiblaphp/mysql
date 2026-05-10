@@ -584,6 +584,28 @@ class Connection
             if ($isKillable && $this->params->enableServerSideCancellation && $this->threadId > 0 && ! $this->isClosed()) {
                 $this->wasQueryCancelled = true;
                 $this->dispatchKillQuery($this->threadId);
+            } elseif ($isKillable && ! $this->params->enableServerSideCancellation && ! $this->isClosed()) {
+                // Cannot cleanly interrupt the running query without a side-channel.
+                // The only safe option is to close and let the caller reconnect.
+                $this->close();
+            }
+        }
+    }
+
+    /**
+     * Cancels the currently executing command and clears the queue.
+     * Used to interrupt long-running queries during an emergency rollback.
+     */
+    public function cancelCurrentCommand(): void
+    {
+        if ($this->currentCommand !== null && ! $this->currentCommand->promise->isSettled()) {
+            $this->currentCommand->promise->cancel();
+        }
+
+        while (! $this->commandQueue->isEmpty()) {
+            $cmd = $this->commandQueue->dequeue();
+            if (! $cmd->promise->isSettled()) {
+                $cmd->promise->cancel();
             }
         }
     }
@@ -677,7 +699,7 @@ class Connection
                 Connection::create($this->params, $this->connector)
                     ->then(function (Connection $killConn) use ($threadId): PromiseInterface {
                         return $killConn->query("KILL QUERY {$threadId}")
-                            ->finally(fn() => $killConn->close())
+                            ->finally(fn () => $killConn->close())
                         ;
                     }),
                 $this->params->killTimeoutSeconds
@@ -926,7 +948,7 @@ class Connection
         if ($this->state !== ConnectionState::CLOSED) {
             $this->state = ConnectionState::READY;
         }
-        
+
         $this->currentCommand = null;
         $this->processNextCommand();
     }
