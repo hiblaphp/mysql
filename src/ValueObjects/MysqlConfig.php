@@ -27,6 +27,7 @@ final readonly class MysqlConfig
      * @param bool $resetConnection Whether to send COM_RESET_CONNECTION on release.
      * @param bool $multiStatements Whether to allow stacked queries (e.g. "SELECT 1; SELECT 2").
      *                              Security risk if enabled. Defaults to false.
+     * @param bool $castPreparedTypes Whether to cast prepared statement values to native PHP types. Defaults to true.
      */
     public function __construct(
         public string $host,
@@ -46,6 +47,7 @@ final readonly class MysqlConfig
         public bool $compress = false,
         public bool $resetConnection = false,
         public bool $multiStatements = false,
+        public bool $castPreparedTypes = true,
     ) {
         if ($this->killTimeoutSeconds <= 0) {
             throw new \InvalidArgumentException(
@@ -64,7 +66,8 @@ final readonly class MysqlConfig
      * Recognised keys:
      *   host, port, username, password, database, charset, connect_timeout,
      *   ssl, ssl_ca, ssl_cert, ssl_key, ssl_verify, kill_timeout_seconds,
-     *   enable_server_side_cancellation, compress, reset_connection
+     *   enable_server_side_cancellation, compress, reset_connection,
+     *   multi_statements, cast_prepared_types
      *
      * @param array<string, mixed> $config
      */
@@ -133,6 +136,9 @@ final readonly class MysqlConfig
         $multiStatements = $config['multi_statements'] ?? false;
         $multiStatements = \is_scalar($multiStatements) ? (bool) $multiStatements : false;
 
+        $castPreparedTypes = $config['cast_prepared_types'] ?? true;
+        $castPreparedTypes = \is_scalar($castPreparedTypes) ? (bool) $castPreparedTypes : true;
+
         return new self(
             host: $host,
             port: $port,
@@ -151,6 +157,7 @@ final readonly class MysqlConfig
             compress: $compress,
             resetConnection: $resetConnection,
             multiStatements: $multiStatements,
+            castPreparedTypes: $castPreparedTypes,
         );
     }
 
@@ -209,6 +216,10 @@ final readonly class MysqlConfig
             ? filter_var($query['multi_statements'], FILTER_VALIDATE_BOOLEAN)
             : false;
 
+        $castPreparedTypes = isset($query['cast_prepared_types'])
+            ? filter_var($query['cast_prepared_types'], FILTER_VALIDATE_BOOLEAN)
+            : true;
+
         return new self(
             host: (string) $parts['host'],
             port: isset($parts['port']) ? (int) $parts['port'] : 3306,
@@ -227,6 +238,7 @@ final readonly class MysqlConfig
             compress: $compress,
             resetConnection: $resetConnection,
             multiStatements: $multiStatements,
+            castPreparedTypes: $castPreparedTypes,
         );
     }
 
@@ -250,6 +262,7 @@ final readonly class MysqlConfig
             compress: $this->compress,
             resetConnection: $this->resetConnection,
             multiStatements: $this->multiStatements,
+            castPreparedTypes: $this->castPreparedTypes,
         );
     }
 

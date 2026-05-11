@@ -983,7 +983,7 @@ class Connection
         $this->pingHandler = new PingHandler($this);
         $this->resetHandler = new ResetHandler($this);
         $this->prepareHandler = new PrepareHandler($this, $commandBuilder);
-        $this->executeHandler = new ExecuteHandler($this, $commandBuilder);
+        $this->executeHandler = new ExecuteHandler($this, $commandBuilder, $this->params);
 
         $this->socket->on('data', $this->handleData(...));
         $this->socket->on('close', $this->handleSocketClose(...));

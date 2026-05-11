@@ -120,6 +120,9 @@ final class MysqlClient implements SqlClientInterface
      *                                   Security risk if enabled.
      *                                   - If `true` or `false`: Overrides the setting in `$config`.
      *                                   - If `null`: Uses the value defined in `$config`.
+     * @param bool|null $castPreparedTypes Explicit override for casting prepared types to native PHP types.
+     *                                     - If `true` or `false`: Overrides the setting in `$config`.
+     *                                     - If `null`: Uses the value defined in `$config`.
      * @param callable|null $onConnect Optional hook invoked on new connections.
      * @param ConnectorInterface|null $connector Optional custom socket connector.
      *
@@ -138,6 +141,7 @@ final class MysqlClient implements SqlClientInterface
         ?bool $enableServerSideCancellation = null,
         ?bool $resetConnection = null,
         ?bool $multiStatements = null,
+        ?bool $castPreparedTypes = null,
         ?callable $onConnect = null,
         ?ConnectorInterface $connector = null,
     ) {
@@ -151,11 +155,13 @@ final class MysqlClient implements SqlClientInterface
             $finalCancellation = $enableServerSideCancellation ?? $params->enableServerSideCancellation;
             $finalReset = $resetConnection ?? $params->resetConnection;
             $finalMultiStatements = $multiStatements ?? $params->multiStatements;
+            $finalCastPreparedTypes = $castPreparedTypes ?? $params->castPreparedTypes;
 
             if (
                 $finalCancellation !== $params->enableServerSideCancellation
                 || $finalReset !== $params->resetConnection
                 || $finalMultiStatements !== $params->multiStatements
+                || $finalCastPreparedTypes !== $params->castPreparedTypes
             ) {
                 $params = new MysqlConfig(
                     host: $params->host,
@@ -175,6 +181,7 @@ final class MysqlClient implements SqlClientInterface
                     compress: $params->compress,
                     resetConnection: $finalReset,
                     multiStatements: $finalMultiStatements,
+                    castPreparedTypes: $finalCastPreparedTypes,
                 );
             }
 

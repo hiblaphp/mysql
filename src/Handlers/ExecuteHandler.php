@@ -7,6 +7,7 @@ namespace Hibla\Mysql\Handlers;
 use Hibla\Mysql\Enums\ExecuteState;
 use Hibla\Mysql\Internals\Connection;
 use Hibla\Mysql\Internals\Result;
+use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Mysql\ValueObjects\StreamContext;
 use Hibla\Mysql\ValueObjects\StreamStats;
 use Hibla\Promise\Promise;
@@ -85,7 +86,8 @@ final class ExecuteHandler
 
     public function __construct(
         private readonly Connection $connection,
-        private readonly CommandBuilder $commandBuilder
+        private readonly CommandBuilder $commandBuilder,
+        private readonly MysqlConfig $config
     ) {
     }
 
@@ -293,13 +295,14 @@ final class ExecuteHandler
     {
         $parser = new ColumnDefinitionOrEofParser();
         $frame = $parser->parse($reader, $length, $seq);
+        $stringifyValues = ! $this->config->castPreparedTypes;
 
         if ($frame instanceof MetadataOmittedRowMarker) {
             $this->state = ExecuteState::ROWS;
 
-            $this->rowParser = new DynamicRowOrEofParser($this->columnDefinitions, forceTextFormat: false);
+            $this->rowParser = new DynamicRowOrEofParser($this->columnDefinitions, forceTextFormat: false, stringifyValues: $stringifyValues);
 
-            $tempParser = new BinaryRowParser($this->columnDefinitions);
+            $tempParser = new BinaryRowParser($this->columnDefinitions, stringifyValues: $stringifyValues);
             $rowFrame = $tempParser->parseRemainingRow($reader);
 
             $this->handleRowData($rowFrame->values);
@@ -309,7 +312,7 @@ final class ExecuteHandler
 
         if ($frame instanceof EofPacket) {
             $this->state = ExecuteState::ROWS;
-            $this->rowParser = new DynamicRowOrEofParser($this->columnDefinitions);
+            $this->rowParser = new DynamicRowOrEofParser($this->columnDefinitions, stringifyValues: $stringifyValues);
 
             return false;
         }
