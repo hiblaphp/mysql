@@ -14,7 +14,6 @@ use Hibla\Mysql\Internals\ManagedPreparedStatement;
 use Hibla\Mysql\Internals\PreparedStatement;
 use Hibla\Mysql\Internals\Transaction;
 use Hibla\Mysql\Manager\PoolManager;
-use Hibla\Mysql\Traits\CancellationHelperTrait;
 use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
@@ -61,8 +60,6 @@ use function Hibla\await;
  */
 final class MysqlClient implements SqlClientInterface
 {
-    use CancellationHelperTrait;
-
     /**
      * @var PoolManager|null
      */
@@ -273,9 +270,9 @@ final class MysqlClient implements SqlClientInterface
             })
         ;
 
-        $this->bindInnerCancellation($promise, $innerPromise);
+        Promise::forwardCancellation($promise, $innerPromise);
 
-        return $this->withCancellation($promise);
+        return Promise::propagateCancellation($promise);
     }
 
     /**
@@ -334,9 +331,9 @@ final class MysqlClient implements SqlClientInterface
             })
         ;
 
-        $this->bindInnerCancellation($promise, $innerPromise);
+        Promise::forwardCancellation($promise, $innerPromise);
 
-        return $this->withCancellation($promise);
+        return Promise::propagateCancellation($promise);
     }
 
     /**
@@ -349,9 +346,8 @@ final class MysqlClient implements SqlClientInterface
      */
     public function execute(string $sql, array $params = []): PromiseInterface
     {
-        return $this->withCancellation(
-            $this->query($sql, $params)
-                ->then(fn (ResultInterface $result) => $result->affectedRows)
+        return Promise::propagateCancellation(
+            $this->query($sql, $params)->then(fn (ResultInterface $result) => $result->affectedRows)
         );
     }
 
@@ -365,7 +361,7 @@ final class MysqlClient implements SqlClientInterface
      */
     public function executeGetId(string $sql, array $params = []): PromiseInterface
     {
-        return $this->withCancellation(
+        return Promise::propagateCancellation(
             $this->query($sql, $params)
                 ->then(fn (ResultInterface $result) => $result->lastInsertId)
         );
@@ -381,7 +377,7 @@ final class MysqlClient implements SqlClientInterface
      */
     public function fetchOne(string $sql, array $params = []): PromiseInterface
     {
-        return $this->withCancellation(
+        return Promise::propagateCancellation(
             $this->query($sql, $params)
                 ->then(fn (ResultInterface $result) => $result->fetchOne())
         );
@@ -398,7 +394,7 @@ final class MysqlClient implements SqlClientInterface
      */
     public function fetchValue(string $sql, string|int|null $column = null, array $params = []): PromiseInterface
     {
-        return $this->withCancellation(
+        return Promise::propagateCancellation(
             $this->query($sql, $params)
                 ->then(function (ResultInterface $result) use ($column) {
                     $row = $result->fetchOne();
@@ -523,9 +519,9 @@ final class MysqlClient implements SqlClientInterface
             ->finally($releaseOnce)
         ;
 
-        $this->bindInnerCancellation($promise, $innerPromise);
+        Promise::forwardCancellation($promise, $innerPromise);
 
-        return $this->withCancellation($promise);
+        return Promise::propagateCancellation($promise);
     }
 
     /**
@@ -540,7 +536,7 @@ final class MysqlClient implements SqlClientInterface
         $pool = $this->getPool();
         $connection = null;
 
-        return $this->withCancellation(
+        return Promise::propagateCancellation(
             $this->borrowConnection()
                 ->then(function (Connection $conn) use ($isolationLevel, $pool, &$connection) {
                     $connection = $conn;
@@ -653,7 +649,7 @@ final class MysqlClient implements SqlClientInterface
             }
         });
 
-        return $this->withCancellation($fiberPromise);
+        return Promise::propagateCancellation($fiberPromise);
     }
 
     /**

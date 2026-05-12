@@ -8,7 +8,6 @@ use Hibla\Cache\ArrayCache;
 use Hibla\Mysql\Interfaces\MysqlResult;
 use Hibla\Mysql\Interfaces\MysqlRowStream;
 use Hibla\Mysql\Manager\PoolManager;
-use Hibla\Mysql\Traits\CancellationHelperTrait;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use Hibla\Sql\Exceptions\TransactionException;
@@ -23,8 +22,6 @@ use Hibla\Sql\Transaction as TransactionInterface;
  */
 class Transaction implements TransactionInterface
 {
-    use CancellationHelperTrait;
-
     /**
      * @var list<callable(): void>
      */
@@ -72,7 +69,7 @@ class Transaction implements TransactionInterface
         if (\count($params) === 0) {
             $promise = $this->connection->query($sql);
 
-            return $this->withCancellation($this->trackErrorState($promise));
+            return Promise::propagateCancellation($this->trackErrorState($promise));
         }
 
         $innerPromise = null;
@@ -94,9 +91,9 @@ class Transaction implements TransactionInterface
             })
         ;
 
-        $this->bindInnerCancellation($promise, $innerPromise);
+        Promise::forwardCancellation($promise, $innerPromise);
 
-        return $this->withCancellation($this->trackErrorState($promise));
+        return Promise::propagateCancellation($this->trackErrorState($promise));
     }
 
     /**
@@ -129,7 +126,7 @@ class Transaction implements TransactionInterface
                 }
             );
 
-            return $this->withCancellation($tracked);
+            return Promise::propagateCancellation($tracked);
         }
 
         $innerPromise = null;
@@ -160,9 +157,9 @@ class Transaction implements TransactionInterface
             })
         ;
 
-        $this->bindInnerCancellation($promise, $innerPromise);
+        Promise::forwardCancellation($promise, $innerPromise);
 
-        return $this->withCancellation($this->trackErrorState($promise));
+        return Promise::propagateCancellation($this->trackErrorState($promise));
     }
 
     /**
@@ -191,7 +188,7 @@ class Transaction implements TransactionInterface
             }
         );
 
-        $this->bindInnerCancellation($promise, $innerPromise);
+        Promise::forwardCancellation($promise, $innerPromise);
 
         return $this->trackErrorState($promise);
     }
@@ -201,7 +198,7 @@ class Transaction implements TransactionInterface
      */
     public function execute(string $sql, array $params = []): PromiseInterface
     {
-        return $this->withCancellation(
+        return Promise::propagateCancellation(
             $this->query($sql, $params)->then(fn (ResultInterface $result) => $result->affectedRows)
         );
     }
@@ -211,7 +208,7 @@ class Transaction implements TransactionInterface
      */
     public function executeGetId(string $sql, array $params = []): PromiseInterface
     {
-        return $this->withCancellation(
+        return Promise::propagateCancellation(
             $this->query($sql, $params)->then(function (ResultInterface $result) {
                 $row = $result->fetchOne();
                 if ($row !== null && \count($row) > 0) {
@@ -230,7 +227,7 @@ class Transaction implements TransactionInterface
      */
     public function fetchOne(string $sql, array $params = []): PromiseInterface
     {
-        return $this->withCancellation(
+        return Promise::propagateCancellation(
             $this->query($sql, $params)->then(fn (ResultInterface $result) => $result->fetchOne())
         );
     }
@@ -240,7 +237,7 @@ class Transaction implements TransactionInterface
      */
     public function fetchValue(string $sql, string|int|null $column = null, array $params = []): PromiseInterface
     {
-        return $this->withCancellation(
+        return Promise::propagateCancellation(
             $this->query($sql, $params)
                 ->then(function (ResultInterface $result) use ($column) {
                     $row = $result->fetchOne();
@@ -339,7 +336,7 @@ class Transaction implements TransactionInterface
             ->finally($this->releaseConnection(...))
         ;
 
-        return $this->shield($promise);
+        return Promise::uninterruptible($promise);
     }
 
     /**
@@ -399,9 +396,9 @@ class Transaction implements TransactionInterface
                 },
                 function (\Throwable $e): void {
                     // MariaDB/MySQL Error 1317: Query execution was interrupted.
-                    // This happens if the KILL QUERY side-channel reaches the server exactly 
-                    // when the ROLLBACK starts, or if MariaDB is still cleaning up the 
-                    // thread interrupt. Since we are rolling back anyway, we treat 
+                    // This happens if the KILL QUERY side-channel reaches the server exactly
+                    // when the ROLLBACK starts, or if MariaDB is still cleaning up the
+                    // thread interrupt. Since we are rolling back anyway, we treat
                     // this as a successful termination of the transaction.
                     if ($e->getCode() === 1317) {
                         $this->executeCallbacks($this->onRollbackCallbacks);
@@ -423,12 +420,12 @@ class Transaction implements TransactionInterface
         if ($this->connection->wasQueryCancelled()) {
             $this->releaseConnection();
 
-            return $this->shield($promise);
+            return Promise::uninterruptible($promise);
         }
 
         // Normal path: release only after ROLLBACK completes to prevent a dirty
         // connection from being parked in the idle pool.
-        return $this->shield($promise->finally($this->releaseConnection(...)));
+        return Promise::uninterruptible($promise->finally($this->releaseConnection(...)));
     }
 
     /**
@@ -451,7 +448,7 @@ class Transaction implements TransactionInterface
             }
         );
 
-        return $this->withCancellation($this->trackErrorState($promise));
+        return Promise::propagateCancellation($this->trackErrorState($promise));
     }
 
     /**
@@ -479,7 +476,7 @@ class Transaction implements TransactionInterface
             }
         );
 
-        return $this->withCancellation($promise);
+        return Promise::propagateCancellation($promise);
     }
 
     /**
@@ -502,7 +499,7 @@ class Transaction implements TransactionInterface
             }
         );
 
-        return $this->withCancellation($this->trackErrorState($promise));
+        return Promise::propagateCancellation($this->trackErrorState($promise));
     }
 
     /**

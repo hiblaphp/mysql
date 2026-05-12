@@ -6,7 +6,6 @@ namespace Hibla\Mysql\Internals;
 
 use Hibla\Mysql\Interfaces\MysqlResult;
 use Hibla\Mysql\Interfaces\MysqlRowStream;
-use Hibla\Mysql\Traits\CancellationHelperTrait;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
@@ -25,8 +24,6 @@ use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
  */
 class TransactionPreparedStatement implements PreparedStatementInterface
 {
-    use CancellationHelperTrait;
-
     private bool $isClosed = false;
 
     public function __construct(
@@ -46,7 +43,7 @@ class TransactionPreparedStatement implements PreparedStatementInterface
         /** @var PromiseInterface<MysqlResult> $promise */
         $promise = $this->statement->execute($params);
 
-        return $this->withCancellation($promise);
+        return Promise::propagateCancellation($promise);
     }
 
     /**
@@ -81,7 +78,7 @@ class TransactionPreparedStatement implements PreparedStatementInterface
             );
         }
 
-        return $this->withCancellation($promise);
+        return Promise::propagateCancellation($promise);
     }
 
     /**

@@ -7,8 +7,8 @@ namespace Hibla\Mysql\Internals;
 use Hibla\Mysql\Interfaces\MysqlResult;
 use Hibla\Mysql\Interfaces\MysqlRowStream;
 use Hibla\Mysql\Manager\PoolManager;
-use Hibla\Mysql\Traits\CancellationHelperTrait;
 use Hibla\Promise\Interfaces\PromiseInterface;
+use Hibla\Promise\Promise;
 use Hibla\Sql\Exceptions\PreparedException;
 use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
 
@@ -22,8 +22,6 @@ use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
  */
 class ManagedPreparedStatement implements PreparedStatementInterface
 {
-    use CancellationHelperTrait;
-
     private bool $isReleased = false;
 
     /**
@@ -51,7 +49,7 @@ class ManagedPreparedStatement implements PreparedStatementInterface
         /** @var PromiseInterface<MysqlResult> $promise */
         $promise = $this->statement->execute($params);
 
-        return $this->withCancellation($promise);
+        return Promise::propagateCancellation($promise);
     }
 
     /**
@@ -67,7 +65,7 @@ class ManagedPreparedStatement implements PreparedStatementInterface
         /** @var PromiseInterface<MysqlRowStream> $promise */
         $promise = $this->statement->executeStream($params);
 
-        return $this->withCancellation($promise);
+        return Promise::propagateCancellation($promise);
     }
 
     /**
