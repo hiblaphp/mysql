@@ -397,7 +397,19 @@ class Transaction implements TransactionInterface
                     $this->executeCallbacks($this->onRollbackCallbacks);
                     $this->onCommitCallbacks = [];
                 },
-                function (\Throwable $e): never {
+                function (\Throwable $e): void {
+                    // MariaDB/MySQL Error 1317: Query execution was interrupted.
+                    // This happens if the KILL QUERY side-channel reaches the server exactly 
+                    // when the ROLLBACK starts, or if MariaDB is still cleaning up the 
+                    // thread interrupt. Since we are rolling back anyway, we treat 
+                    // this as a successful termination of the transaction.
+                    if ($e->getCode() === 1317) {
+                        $this->executeCallbacks($this->onRollbackCallbacks);
+                        $this->onCommitCallbacks = [];
+
+                        return;
+                    }
+
                     throw new TransactionException(
                         'Failed to rollback transaction: ' . $e->getMessage(),
                         (int) $e->getCode(),
