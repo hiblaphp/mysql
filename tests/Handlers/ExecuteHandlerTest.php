@@ -20,8 +20,9 @@ describe('ExecuteHandler', function () {
     it('creates execute handler successfully', function () {
         $connection = Mockery::mock(MysqlConnection::class);
         $commandBuilder = new CommandBuilder();
+        $config = testMysqlConfig();
 
-        $handler = new ExecuteHandler($connection, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder, $config);
 
         expect($handler)->toBeInstanceOf(ExecuteHandler::class);
     });
@@ -35,7 +36,7 @@ describe('ExecuteHandler', function () {
         });
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($connection, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder, testMysqlConfig());
         $promise = new Promise();
 
         $handler->start(1, ['val1'], [], $promise);
@@ -49,7 +50,7 @@ describe('ExecuteHandler', function () {
         $connection->shouldReceive('getThreadId')->andReturn(1);
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($connection, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder, testMysqlConfig());
         $promise = new Promise();
 
         $handler->start(1, [123], [], $promise);
@@ -80,7 +81,7 @@ describe('ExecuteHandler', function () {
         $connection->shouldReceive('writePacket')->once();
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($connection, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder, testMysqlConfig());
         $promise = new Promise();
 
         $handler->start(1, [], [], $promise);
@@ -127,7 +128,7 @@ describe('ExecuteHandler', function () {
         );
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($connection, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder, testMysqlConfig());
         $promise = new Promise();
 
         $handler->start(1, [], [$colDef], $promise);
@@ -192,7 +193,7 @@ describe('ExecuteHandler', function () {
         );
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($connection, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder, testMysqlConfig());
         $promise = new Promise();
 
         $handler->start(1, [], [$colDef], $promise, $streamContext);
@@ -241,7 +242,7 @@ describe('ExecuteHandler', function () {
         );
 
         $commandBuilder = new CommandBuilder();
-        $handler = new ExecuteHandler($connection, $commandBuilder);
+        $handler = new ExecuteHandler($connection, $commandBuilder, testMysqlConfig());
         $promise = new Promise();
 
         $promise->catch(function () {
