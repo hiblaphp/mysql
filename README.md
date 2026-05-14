@@ -48,8 +48,13 @@
 - [Streaming results](#streaming-results)
 - [Transactions](#transactions)
   - [High-level API: `transaction()`](#high-level-api-transaction)
+  - [Automatic retry](#automatic-retry)
+  - [`TransactionOptions` reference](#transactionoptions-reference)
   - [Low-level API: `beginTransaction()`](#low-level-api-begintransaction)
+  - [Tainted state](#tainted-state)
+  - [Cancellation behaviour](#cancellation-behaviour)
   - [Savepoints](#savepoints)
+  - [Commit and rollback hooks](#commit-and-rollback-hooks)
   - [Transaction lifecycle rules](#transaction-lifecycle-rules)
 - [Stored procedures](#stored-procedures)
 - [Multi-statements](#multi-statements)
@@ -430,21 +435,17 @@ foreach ($stream as $row) {
 
 ## Transactions
 
-Transactions use `START TRANSACTION` (not `SET SESSION TRANSACTION ISOLATION LEVEL`), which means **isolation levels are scoped strictly to the individual transaction**. They do not leak into the session or affect any other concurrent query on the same connection. Each transaction starts clean, and the connection is returned to the pool in its original session state when the transaction completes.
+Transactions use `START TRANSACTION`, which means **isolation levels are scoped strictly to the individual transaction**. They do not leak into the session or affect any other concurrent query on the same connection. Each transaction starts clean, and the connection is returned to the pool in its original session state when the transaction completes.
 
 ---
 
 ### High-level API: `transaction()`
 
-The `transaction()` method is the recommended way to run a transaction. It handles `START TRANSACTION`, commit, rollback, and optional retry automatically so you only write the business logic.
+The `transaction()` method is the recommended way to run a transaction. It handles `START TRANSACTION`, commit, rollback, and automatic retry automatically so you only write the business logic.
 
 **The callback is implicitly wrapped in a `Fiber` via `async()`.** This means `await()` is safe to call freely inside it without blocking the event loop. Concurrent async work, nested queries, and streaming all behave correctly inside the callback with no extra setup required.
 
 ```php
-use Hibla\Sql\TransactionOptions;
-use Hibla\Sql\IsolationLevel;
-
-// Named parameters work identically inside transactions
 $result = await($client->transaction(function (TransactionInterface $tx) use ($from, $to) {
     await($tx->execute(
         'UPDATE accounts SET balance = balance - :amount WHERE id = :id',
@@ -461,7 +462,13 @@ $result = await($client->transaction(function (TransactionInterface $tx) use ($f
 
 **Partial failure is never silently committed.** If any `await()` inside the callback throws, the client automatically rolls back the entire transaction and re-throws the exception.
 
-**Retry on transient failures** such as deadlocks and lock wait timeouts is built in via `TransactionOptions`. The entire callback is re-run from scratch on each attempt.
+---
+
+### Automatic retry
+
+`transaction()` automatically retries the entire callback on **deadlocks** (`DeadlockException`, MySQL error 1213) and **lock wait timeouts** (`LockWaitTimeoutException`, MySQL error 1205). These two exception types implement the `RetryableException` marker interface, which the retry engine recognises without any configuration.
+
+The default `TransactionOptions` has `attempts: 1` (no retry). Pass `withAttempts()` to enable retry:
 
 ```php
 await($client->transaction(
@@ -480,6 +487,66 @@ await($client->transaction(
         ->withIsolationLevel(IsolationLevel::REPEATABLE_READ)
 ));
 ```
+
+On each retry the callback runs again from scratch on a fresh `START TRANSACTION`. The rollback from the failed attempt is issued automatically before the next attempt begins.
+
+---
+
+### `TransactionOptions` reference
+
+`TransactionOptions` is an immutable value object. All `with*()` methods return a new instance.
+
+```php
+use Hibla\Sql\TransactionOptions;
+use Hibla\Sql\IsolationLevel;
+
+$options = TransactionOptions::default()
+    ->withAttempts(5)
+    ->withIsolationLevel(IsolationLevel::SERIALIZABLE)
+    ->withRetryableExceptions([MyOptimisticLockException::class]);
+```
+
+| Method | Description |
+|---|---|
+| `TransactionOptions::default()` | Returns a default instance: 1 attempt, no isolation level, no custom retryable exceptions. |
+| `withAttempts(int $n)` | Maximum number of attempts (must be ≥ 1). |
+| `withIsolationLevel(IsolationLevelInterface $level)` | Sets the isolation level for each attempt. Applied via `SET TRANSACTION ISOLATION LEVEL` scoped to the transaction, never to the session. |
+| `withRetryableExceptions(callable\|array $exceptions)` | Extends retry logic for third-party exceptions you cannot modify. Accepts a class-string array or a `callable(\Throwable): bool` predicate. |
+| `withoutRetryableExceptions()` | Removes any previously set custom retry predicate. |
+
+**Retry decision hierarchy.** When a transaction attempt fails, `transaction()` calls `$options->shouldRetry($e)` to decide whether to try again. The check follows a strict three-tier order:
+
+1. **`RetryableException` marker interface** — any exception implementing this interface retries automatically. `DeadlockException` and `LockWaitTimeoutException` implement it out of the box. Your own exceptions can opt in the same way:
+
+    ```php
+    class MyOptimisticLockException extends \RuntimeException
+        implements \Hibla\Sql\Exceptions\RetryableException {}
+    ```
+
+2. **Known permanent SQL failures** — exceptions the SQL layer has classified as non-retryable are *never* retried, regardless of what any user predicate returns. This protects against accidentally retrying errors that will never resolve, such as a `UNIQUE` constraint violation:
+    - `ConstraintViolationException`
+    - `QueryException`
+    - `PreparedException`
+    - `ConnectionException`
+    - `AuthenticationException`
+    - `TransactionException`
+    - `TimeoutException` (note: `LockWaitTimeoutException` extends `TimeoutException` but is carved out by tier 1)
+
+3. **User predicate** — for third-party exceptions that fail tiers 1 and 2, the predicate from `withRetryableExceptions()` is consulted:
+
+    ```php
+    // Retry by class list
+    $options = TransactionOptions::default()
+        ->withAttempts(3)
+        ->withRetryableExceptions([ThirdPartyConflictException::class]);
+
+    // Retry by predicate
+    $options = TransactionOptions::default()
+        ->withAttempts(3)
+        ->withRetryableExceptions(
+            fn(\Throwable $e) => $e instanceof ThirdPartyConflictException && $e->getCode() === 409
+        );
+    ```
 
 ---
 
@@ -509,6 +576,64 @@ Unlike `transaction()`, the low-level API does **not** retry automatically and d
 
 ---
 
+### Tainted state
+
+If any query inside a transaction throws, the transaction is immediately marked **tainted**. All subsequent calls to `query()`, `execute()`, `stream()`, `prepare()`, and `savepoint()` on that transaction will throw a `TransactionException` until the taint is cleared. The only two operations that accept a tainted transaction are:
+
+- `rollback()` — rolls back and releases the connection. This is the expected recovery path.
+- `rollbackTo(string $identifier)` — rolls back to a previously created savepoint and **clears the tainted state**, allowing the transaction to continue.
+
+Attempting to `commit()` a tainted transaction throws a `TransactionException` immediately without contacting the server.
+
+```php
+$tx = await($client->beginTransaction());
+
+try {
+    await($tx->savepoint('before_risky'));
+
+    try {
+        await($tx->execute(
+            'INSERT INTO external_refs (id) VALUES (:id)',
+            ['id' => $externalId]
+        ));
+    } catch (\Throwable $e) {
+        // Rolling back to the savepoint also clears the tainted state,
+        // so queries after this point are allowed to continue.
+        await($tx->rollbackTo('before_risky'));
+    }
+
+    await($tx->releaseSavepoint('before_risky'));
+    await($tx->commit());
+} catch (\Throwable $e) {
+    await($tx->rollback());
+    throw $e;
+}
+```
+
+When using the high-level `transaction()` API, taint is handled for you: any unhandled exception from the callback triggers an automatic rollback before the exception propagates or the next retry attempt begins.
+
+---
+
+### Cancellation behaviour
+
+Promise cancellation inside a transaction follows the same `enableServerSideCancellation` setting as standalone queries. When cancellation is enabled and a query promise is cancelled mid-execution, the connection dispatches `KILL QUERY` via a side-channel TCP connection. The transaction is then **tainted** and the failed query is treated the same as any other query error.
+
+Cancelling the **outer `transaction()` promise** (i.e. the promise returned by `transaction()` itself) causes the client to interrupt any currently running query on the connection and then issue `ROLLBACK` before the cancellation propagates:
+
+```php
+$promise = $client->transaction(function (TransactionInterface $tx) {
+    await($tx->execute('UPDATE ...'));
+    await($tx->execute('UPDATE ...')); // still running when cancelled
+});
+
+Loop::addTimer(2.0, fn() => $promise->cancel());
+// → running query is interrupted, ROLLBACK is issued, connection returned to pool
+```
+
+`commit()` and `rollback()` are **never cancellable**, regardless of the `enableServerSideCancellation` setting. Both operations always run to completion so the server-side transaction state is always deterministic to prevent a corrupted transaction state.
+
+---
+
 ### Savepoints
 
 Savepoints let you mark a point within a transaction and roll back to it selectively without abandoning the entire transaction.
@@ -528,6 +653,7 @@ await($client->transaction(function (TransactionInterface $tx) {
             ['id' => $externalId]
         ));
     } catch (\Throwable $e) {
+        // Rolls back to the savepoint and clears the tainted state.
         await($tx->rollbackTo('before_risky_op'));
     }
 
@@ -535,23 +661,52 @@ await($client->transaction(function (TransactionInterface $tx) {
 }));
 ```
 
-Rolling back to a savepoint also **clears the tainted state** on the transaction, so you can continue issuing queries after a partial rollback.
+### Commit and rollback hooks
 
+The `TransactionInterface` exposes `onCommit()` and `onRollback()` methods. These allow you to register callbacks that fire *after* the transaction has successfully committed or rolled back on the server.
+
+These hooks are extremely useful for triggering side-effects—such as dispatching domain events, clearing caches, or enqueuing background jobs—only when you are guaranteed the database state has been durably persisted (or completely aborted).
+
+```php
+await($client->transaction(function (TransactionInterface $tx) use ($user) {
+    await($tx->execute(
+        'INSERT INTO users (name, email) VALUES (:name, :email)',
+        ['name' => $user->name, 'email' => $user->email]
+    ));
+
+    // Fires only if the COMMIT succeeds
+    $tx->onCommit(function () use ($user) {
+        EventDispatcher::dispatch(new UserCreated($user));
+    });
+    
+    // Fires if the transaction rolls back (e.g., constraint violation, cancellation)
+    $tx->onRollback(function () use ($user) {
+        Logger::warning("Failed to persist user: {$user->email}");
+    });
+}));
+```
+
+**Hook rules:**
+* **Post-execution:** They execute *after* the `COMMIT` or `ROLLBACK` has been acknowledged by the MySQL server.
+* **Mutually exclusive:** A successful commit clears all rollback hooks, and a rollback clears all commit hooks. 
+* **FIFO order:** Multiple callbacks registered to the same hook are executed in the exact order they were added.
+* **Active registration:** Hooks must be registered while the transaction is active. Attempting to call `onCommit()` or `onRollback()` after the transaction has closed will immediately throw a `TransactionException`.
 ---
 
 ### Transaction lifecycle rules
 
 **Isolation level scoping.** Isolation levels are applied via `SET TRANSACTION ISOLATION LEVEL` immediately before `START TRANSACTION`, scoping them strictly to that transaction. The session isolation level is never mutated.
 
-**Tainted state.** If any query inside a transaction throws, the transaction is marked tainted. The client will reject all further queries on that transaction until you call `rollback()` or roll back to a savepoint via `rollbackTo()`.
+**`commit()` and `rollback()` are uninterruptible.** They are internally wrapped with `Promise::uninterruptible()` so a concurrent `cancel()` on the outer promise does not interrupt either operation mid-flight. The server-side transaction state is always consistent.
 
-**Automatic rollback on partial failure.** When using `transaction()`, any unhandled exception from the callback causes an automatic `ROLLBACK` before the exception propagates to the caller.
+**`rollback()` is idempotent.** Calling it on an already-committed, already-rolled-back, or released transaction silently returns a resolved promise. It is safe to place in `finally` blocks.
 
-**GC safety net.** If a `Transaction` object is garbage collected without an explicit `commit()` or `rollback()`, a `ROLLBACK` is issued automatically. Always manage the lifecycle explicitly.
+**Automatic rollback on garbage collection.** If a `Transaction` object is garbage collected without an explicit `commit()` or `rollback()`, a fire-and-forget `ROLLBACK` is issued automatically. Always manage the lifecycle explicitly rather than relying on this safety net.
 
-**`commit()` and `rollback()` are not cancellable.** These operations always run to completion regardless of the `enableServerSideCancellation` setting.
+**`commit()` is rejected while tainted.** Attempting to commit a tainted transaction throws `TransactionException` immediately without contacting the server. Call `rollback()` or use savepoints to recover.
 
 ---
+
 
 ## Stored procedures
 
