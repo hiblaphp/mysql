@@ -106,7 +106,7 @@ class PoolManager
 
     private int $activeConnections = 0;
 
-    private MysqlConfig $MysqlConfig;
+    private MysqlConfig $mysqlConfig;
 
     private ?ConnectorInterface $connector;
 
@@ -221,7 +221,7 @@ class PoolManager
             $params = $params->withQueryCancellation($enableServerSideCancellation);
         }
 
-        $this->MysqlConfig = $params;
+        $this->mysqlConfig = $params;
 
         if ($maxSize <= 0) {
             throw new InvalidArgumentException('Pool max size must be greater than 0');
@@ -307,10 +307,10 @@ class PoolManager
                 'acquire_timeout' => $this->acquireTimeout,
                 'config_validated' => $this->configValidated,
                 'tracked_connections' => \count($this->connectionCreatedAt),
-                'query_cancellation_enabled' => $this->MysqlConfig->enableServerSideCancellation,
-                'compression_enabled' => $this->MysqlConfig->compress,
-                'reset_connection_enabled' => $this->MysqlConfig->resetConnection,
-                'multi_statements_enabled' => $this->MysqlConfig->multiStatements,
+                'query_cancellation_enabled' => $this->mysqlConfig->enableServerSideCancellation,
+                'compression_enabled' => $this->mysqlConfig->compress,
+                'reset_connection_enabled' => $this->mysqlConfig->resetConnection,
+                'multi_statements_enabled' => $this->mysqlConfig->multiStatements,
                 'on_connect_hook' => $this->onConnect !== null,
                 'is_graceful_shutdown' => $this->isGracefulShutdown,
             ];
@@ -451,7 +451,7 @@ class PoolManager
         }
 
         // 2. Perform connection state reset if enabled.
-        if ($this->MysqlConfig->resetConnection) {
+        if ($this->mysqlConfig->resetConnection) {
             $this->resetAndRelease($connection);
 
             return;
@@ -659,32 +659,26 @@ class PoolManager
             ;
         }
 
+        $drainTempQueue = function () use ($tempQueue): void {
+            while (! $tempQueue->isEmpty()) {
+                $conn = $tempQueue->dequeue();
+
+                if ($this->isClosing || $this->isGracefulShutdown) {
+                    $this->removeConnection($conn);
+                } else {
+                    $this->pool->enqueue($conn);
+                }
+            }
+        };
+
         Promise::all($checkPromises)
             ->then(
-                function () use ($promise, $tempQueue, &$stats): void {
-                    while (! $tempQueue->isEmpty()) {
-                        $conn = $tempQueue->dequeue();
-
-                        if ($this->isClosing || $this->isGracefulShutdown) {
-                            $this->removeConnection($conn);
-                        } else {
-                            $this->pool->enqueue($conn);
-                        }
-                    }
-
+                function () use ($promise, $drainTempQueue, &$stats): void {
+                    $drainTempQueue();
                     $promise->resolve($stats);
                 },
-                function (Throwable $e) use ($promise, $tempQueue): void {
-                    while (! $tempQueue->isEmpty()) {
-                        $conn = $tempQueue->dequeue();
-
-                        if ($this->isClosing || $this->isGracefulShutdown) {
-                            $this->removeConnection($conn);
-                        } else {
-                            $this->pool->enqueue($conn);
-                        }
-                    }
-
+                function (Throwable $e) use ($promise, $drainTempQueue): void {
+                    $drainTempQueue();
                     $promise->reject($e);
                 }
             )
@@ -732,7 +726,6 @@ class PoolManager
         }
 
         // All in-flight work has settled. Clear state and signal completion.
-        $this->activeConnections = 0;
         $this->connectionLastUsed = [];
         $this->connectionCreatedAt = [];
 
@@ -800,7 +793,7 @@ class PoolManager
                     // Mark active again for releaseClean or reset logic.
                     $this->activeConnectionsMap[$connId] = $connection;
 
-                    if ($this->MysqlConfig->resetConnection) {
+                    if ($this->mysqlConfig->resetConnection) {
                         $this->resetAndRelease($connection);
                     } else {
                         $this->releaseClean($connection);
@@ -829,7 +822,7 @@ class PoolManager
 
                     $this->activeConnectionsMap[$connId] = $connection;
 
-                    if ($this->MysqlConfig->resetConnection) {
+                    if ($this->mysqlConfig->resetConnection) {
                         $this->resetAndRelease($connection);
                     } else {
                         $this->releaseClean($connection);
@@ -908,10 +901,6 @@ class PoolManager
 
         // ALWAYS try to serve existing waiters first, even during shutdown!
         $waiter = $this->dequeueActiveWaiter();
-
-        if ($this->waiters->isEmpty()) {
-            $this->waiters = new SplQueue();
-        }
 
         if ($waiter !== null) {
             $connection->resume();
@@ -1003,7 +992,7 @@ class PoolManager
         /** @var Promise<MysqlConnection> $promise */
         $promise = new Promise();
 
-        MysqlConnection::create($this->MysqlConfig, $this->connector)
+        MysqlConnection::create($this->mysqlConfig, $this->connector)
             ->then(
                 function (MysqlConnection $connection) use ($promise): void {
                     // Abort immediately if the pool was force-closed mid-handshake
@@ -1071,7 +1060,7 @@ class PoolManager
 
         $this->activeConnections++;
 
-        MysqlConnection::create($this->MysqlConfig, $this->connector)
+        MysqlConnection::create($this->mysqlConfig, $this->connector)
             ->then(
                 function (MysqlConnection $connection) use ($waiter): void {
                     if ($this->isClosing) {
