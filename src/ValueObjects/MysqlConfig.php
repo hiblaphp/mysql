@@ -195,7 +195,7 @@ final readonly class MysqlConfig
 
         $enableServerSideCancellation = isset($query['enable_server_side_cancellation'])
             ? filter_var($query['enable_server_side_cancellation'], FILTER_VALIDATE_BOOLEAN)
-            : true;
+            : false;
 
         $compress = isset($query['compress'])
             ? filter_var($query['compress'], FILTER_VALIDATE_BOOLEAN)
