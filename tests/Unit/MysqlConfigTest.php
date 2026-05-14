@@ -129,6 +129,12 @@ describe('MysqlConfig', function (): void {
                 ->and($config->enableServerSideCancellation)->toBeFalse()
             ;
         });
+
+        it('defaults enableServerSideCancellation to false when absent from URI', function (): void {
+            $config = MysqlConfig::fromUri('mysql://localhost/mydb');
+
+            expect($config->enableServerSideCancellation)->toBeFalse();
+        });
     });
 
     describe('Helpers and Logic', function (): void {
