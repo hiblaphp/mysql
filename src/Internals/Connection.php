@@ -52,7 +52,7 @@ use Throwable;
  *
  * @see \Hibla\Mysql\MysqlClient
  */
-final class Connection
+class Connection
 {
     /**
      * @var SplQueue<CommandRequest>
