@@ -37,6 +37,13 @@
 - [How it works](#how-it-works)
 - [hiblaphp/sql contracts](#hiblaphpsql-contracts)
 
+**Configuration**
+- [MysqlConfig](#mysqlconfig)
+  - [Construction](#construction)
+  - [Properties](#properties)
+  - [Methods](#methods)
+  - [Sharing a config across multiple clients](#sharing-a-config-across-multiple-clients)
+
 **Core API**
 - [The `MysqlClient`](#the-mysqlclient)
 - [Making queries](#making-queries)
@@ -54,7 +61,6 @@
   - [Tainted state](#tainted-state)
   - [Cancellation behaviour](#cancellation-behaviour)
   - [Savepoints](#savepoints)
-  - [Commit and rollback hooks](#commit-and-rollback-hooks)
   - [Transaction lifecycle rules](#transaction-lifecycle-rules)
 - [Stored procedures](#stored-procedures)
 - [Multi-statements](#multi-statements)
@@ -85,7 +91,7 @@
 - [Development](#development)
 
 **Reference**
-- [API Reference](#api-reference)
+- [API Reference](#api-reference-summary)
   - [`MysqlClient`](#mysqlclient-1)
   - [`PreparedStatementInterface`](#preparedstatementinterface-managedpreparedstatement)
   - [`TransactionInterface`](#transactioninterface)
@@ -214,6 +220,197 @@ class UserRepository
 }
 ```
 
+
+## `MysqlConfig`
+
+`MysqlConfig` is the canonical, immutable connection-level configuration object. All three config formats accepted by `MysqlClient` like DSN string, associative array, and `MysqlConfig` directly and are normalised to this type internally. You can construct it explicitly when you want to share a single config object across multiple clients, derive variants from a base config, or keep all settings in one strongly-typed place.
+
+```php
+use Hibla\Mysql\ValueObjects\MysqlConfig;
+
+$config = new MysqlConfig(
+    host: '127.0.0.1',
+    port: 3306,
+    username: 'app_user',
+    password: 'secret',
+    database: 'production',
+    charset: 'utf8mb4',
+    ssl: true,
+    sslCa: '/etc/ssl/certs/ca-bundle.crt',
+    sslVerify: true,
+    enableServerSideCancellation: true,
+    resetConnection: true,
+    castPreparedTypes: true,
+);
+
+$client = new MysqlClient($config, maxConnections: 20);
+```
+
+Because `MysqlConfig` is `readonly`, every property is immutable after construction. Use the factory methods or `with*()` methods to derive variants.
+
+---
+
+### Construction
+
+Three construction paths are available depending on where your config comes from.
+
+**Direct constructor**
+
+All properties are named and have defaults except `host`. Pass only what you need:
+
+```php
+$config = new MysqlConfig(
+    host: '127.0.0.1',
+    username: 'app_user',
+    password: 'secret',
+    database: 'mydb',
+);
+```
+
+**`MysqlConfig::fromArray(array $config)`**
+
+Accepts an associative array of options. Unknown keys are silently ignored. All keys are optional except `host`:
+
+```php
+$config = MysqlConfig::fromArray([
+    'host'                           => '127.0.0.1',
+    'port'                           => 3306,
+    'username'                       => 'app_user',
+    'password'                       => 'secret',
+    'database'                       => 'mydb',
+    'charset'                        => 'utf8mb4',
+    'connect_timeout'                => 10,
+    'ssl'                            => true,
+    'ssl_ca'                         => '/path/to/ca.pem',
+    'ssl_cert'                       => '/path/to/client-cert.pem',
+    'ssl_key'                        => '/path/to/client-key.pem',
+    'ssl_verify'                     => true,
+    'compress'                       => false,
+    'reset_connection'               => true,
+    'multi_statements'               => false,
+    'enable_server_side_cancellation'=> false,
+    'kill_timeout_seconds'           => 3.0,
+    'cast_prepared_types'            => true,
+]);
+```
+
+**`MysqlConfig::fromUri(string $uri)`**
+
+Parses a MySQL DSN string. The scheme must be `mysql`. Most options are passed as query parameters:
+
+```php
+$config = MysqlConfig::fromUri(
+    'mysql://app_user:secret@127.0.0.1:3306/mydb'
+    . '?charset=utf8mb4'
+    . '&ssl=true'
+    . '&ssl_verify=true'
+    . '&ssl_ca=/path/to/ca.pem'
+    . '&reset_connection=true'
+    . '&enable_server_side_cancellation=true'
+    . '&kill_timeout_seconds=5'
+    . '&cast_prepared_types=true'
+);
+```
+
+If no scheme is present, `mysql://` is prepended automatically. Characters in the username or password that are not URL-safe should be percent-encoded.
+
+---
+
+### Properties
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `host` | `string` | — | MySQL server hostname or IP address. Required. |
+| `port` | `int` | `3306` | TCP port. |
+| `username` | `string` | `'root'` | MySQL username. |
+| `password` | `string` | `''` | MySQL password. |
+| `database` | `string` | `''` | Default schema to select on connect. When empty, no `USE` statement is issued and queries must qualify table names with the schema. |
+| `charset` | `string` | `'utf8mb4'` | Connection character set, sent during the handshake. |
+| `connectTimeout` | `int` | `10` | Seconds before a TCP connect attempt is aborted. |
+| `ssl` | `bool` | `false` | Whether to require SSL/TLS. If `true` and the server does not advertise `CLIENT_SSL`, the connection is rejected with a `ConnectionException` rather than falling back to plaintext. |
+| `sslCa` | `string\|null` | `null` | Path to a CA certificate file for server certificate verification. Only used when `ssl` is `true`. |
+| `sslCert` | `string\|null` | `null` | Path to a client certificate file for mutual TLS. Only used when `ssl` is `true`. |
+| `sslKey` | `string\|null` | `null` | Path to a client private key file for mutual TLS. Only used when `ssl` is `true`. |
+| `sslVerify` | `bool` | `false` | Whether to verify the server's SSL certificate against `sslCa`. When `false`, the connection is encrypted but the server identity is not verified. |
+| `killTimeoutSeconds` | `float` | `3.0` | Maximum seconds to wait for a `KILL QUERY` side-channel connection to complete before giving up. Must be greater than zero. Only relevant when `enableServerSideCancellation` is `true`. |
+| `enableServerSideCancellation` | `bool` | `false` | Whether cancelling a query promise dispatches `KILL QUERY` to the server via a dedicated side-channel TCP connection. When `false`, cancellation only transitions the promise state — the server-side query runs to completion. See [Query cancellation](#query-cancellation). |
+| `compress` | `bool` | `false` | Whether to enable MySQL protocol compression (`CLIENT_COMPRESS`). Negotiated at handshake time; if the server does not support it, the connection proceeds uncompressed without error. Requires the `zlib` PHP extension. |
+| `resetConnection` | `bool` | `false` | Whether to send `COM_RESET_CONNECTION` when a connection is returned to the pool. Clears all session state including variables, temporary tables, and prepared statement handles. The `onConnect` hook is re-invoked after every reset. |
+| `multiStatements` | `bool` | `false` | Whether to allow multiple SQL statements separated by `;` in a single call. **Disabled by default — enabling this is a security risk.** A successful SQL injection can chain arbitrary additional statements. See [Multi-statements](#multi-statements). |
+| `castPreparedTypes` | `bool` | `true` | Whether the binary protocol decoder casts column values to native PHP types. When `false`, all prepared statement results are returned as strings. See [Numeric type handling](#numeric-type-handling). |
+
+---
+
+### Methods
+
+**`withQueryCancellation(bool $enabled): self`**
+
+Returns a new `MysqlConfig` with `enableServerSideCancellation` changed to `$enabled`. All other properties are copied unchanged. Useful when you have a shared base config and want to derive a variant with cancellation explicitly on or off for a specific client:
+
+```php
+$base = MysqlConfig::fromArray([
+    'host'     => '127.0.0.1',
+    'username' => 'app_user',
+    'password' => 'secret',
+    'database' => 'mydb',
+]);
+
+// Regular client — cancellation off (default)
+$readClient = new MysqlClient($base);
+
+// Long-running report client — cancellation on so queries can be interrupted
+$reportClient = new MysqlClient(
+    $base->withQueryCancellation(true),
+    maxConnections: 2,
+);
+```
+
+**`toSafeUri(): string`**
+
+Returns a DSN string representation of the config with the password replaced by `***`. Intended for logging and error messages where the raw password must never appear:
+
+```php
+$config = new MysqlConfig(host: '127.0.0.1', username: 'app', password: 'secret', database: 'mydb');
+echo $config->toSafeUri();
+// mysql://app:***@127.0.0.1/mydb
+```
+
+**`useSsl(): bool`**
+
+Returns `true` if `ssl` is `true`. Convenience alias for readability in conditional logic.
+
+**`hasPassword(): bool`**
+
+Returns `true` if `password` is a non-empty string.
+
+**`hasDatabase(): bool`**
+
+Returns `true` if `database` is a non-empty string.
+
+---
+
+### Sharing a config across multiple clients
+
+Because `MysqlConfig` is immutable, one instance can be safely shared and derived from across as many clients as you need:
+
+```php
+$base = new MysqlConfig(
+    host: 'db.internal',
+    username: 'app',
+    password: 'secret',
+    charset: 'utf8mb4',
+    ssl: true,
+    sslVerify: true,
+    sslCa: '/etc/ssl/ca.pem',
+);
+
+// One client per database, sharing all connection-level settings
+$userDb    = new MysqlClient(MysqlConfig::fromArray([...(array) $base, 'database' => 'users']), maxConnections: 10);
+$reportDb  = new MysqlClient($base->withQueryCancellation(true), maxConnections: 2);
+```
+
+> **Note:** `MysqlConfig` does not hold any pool-level settings such as `maxConnections`, `idleTimeout`, or `statementCacheSize`. Those are constructor parameters on `MysqlClient` itself. `MysqlConfig` covers only what is negotiated at the TCP and MySQL handshake level — credentials, charset, SSL, compression, and per-connection protocol behaviour.
+
 ---
 
 ## The `MysqlClient`
@@ -270,6 +467,7 @@ $client = new MysqlClient(
 | `$enableServerSideCancellation` | `bool\|null` | `null` | Controls whether cancelling a query promise dispatches `KILL QUERY` to the server. `true` enables it, `false` disables it, `null` defers to the value in `$config`. When `null` and `$config` does not specify it, server-side cancellation is disabled. See [Query cancellation](#query-cancellation). |
 | `$resetConnection` | `bool\|null` | `null` | Controls whether `COM_RESET_CONNECTION` is sent when a connection is returned to the pool. `true` enables it, `false` disables it, `null` defers to the value in `$config`. Wiping session state on return prevents one caller's session variables from leaking into the next. Note that this also clears all server-side prepared statement handles — the statement cache is cleared automatically on the next borrow. See [Statement caching](#statement-caching). |
 | `$multiStatements` | `bool\|null` | `null` | Controls whether multiple SQL statements separated by `;` may be sent in a single call. `true` enables it, `false` disables it, `null` defers to the value in `$config`. **Enabling this is a security risk** because a successful SQL injection can chain arbitrary additional statements in the same round-trip. See [Multi-statements](#multi-statements). |
+| `$castPreparedTypes` | `bool\|null` | `null` | Controls whether the binary protocol casts column values to native PHP types when executing prepared statements. `true` enables casting (integers return as `int`, floats as `float`, nulls as `null`, etc.), `false` returns every value as a string regardless of column type — matching the behaviour of the text protocol. `null` defers to the value in `$config`, which defaults to `true`. Disable this only when you need uniform string output for serialization or legacy compatibility, or when integrating with code that expects the text-protocol behaviour. |
 | `$onConnect` | `callable\|null` | `null` | Optional hook invoked on every new physical connection immediately after the MySQL handshake completes. Receives a `ConnectionSetup` instance exposing `query()` and `execute()`. Use it to set session variables, time zones, or SQL modes. If `$resetConnection` is enabled, this hook is also re-invoked after every reset. See [onConnect hook](#onconnect-hook). |
 | `$connector` | `ConnectorInterface\|null` | `null` | Optional custom socket connector. When `null`, the default async TCP connector from `hiblaphp/socket` is used. Supply a custom implementation to add proxy support, custom TLS handling, or connection-level instrumentation. |
 
@@ -828,6 +1026,8 @@ $stats = $client->stats;
 | `kill_timeout_seconds` | float | `3.0` | Timeout for the `KILL QUERY` side-channel |
 | `reset_connection` | bool | `false` | Send `COM_RESET_CONNECTION` on pool release |
 | `multi_statements` | bool | `false` | Allow stacked queries — **security risk** |
+| `cast_prepared_types` | bool | `true` | Whether the binary protocol decoder casts column values to native PHP types. When `false`, all values are returned as strings regardless of column type. |
+
 
 ---
 
@@ -1000,7 +1200,31 @@ $col   = $result->fetchColumn('name');
 
 ## Numeric type handling
 
-When queries are executed via prepared statements (i.e. any call to `query()` or `execute()` with `$params`, or explicit `prepare()`), column values are decoded from the **MySQL binary protocol**. The PHP type you receive depends on the MySQL column type.
+The type mapping described here applies **only when `castPreparedTypes` is `true`** (the default) and the query is executed via the binary protocol — i.e. any call to `query()` or `execute()` with `$params`, or explicit `prepare()`.
+
+When `castPreparedTypes` is `false`, every column value is returned as a PHP `string` regardless of the MySQL column type, matching the behaviour of the text protocol. This is useful when:
+
+- You need uniform string output for serialization pipelines that cannot tolerate mixed types.
+- You are integrating with code written against the old text-protocol behaviour and cannot safely introduce type changes.
+- You want to defer type coercion entirely to your own layer.
+
+```php
+// Default — native PHP types from the binary protocol
+$client = new MysqlClient($config);
+$row = await($client->fetchOne('SELECT id, price FROM products WHERE id = ?', [1]));
+// $row['id']    => int(1)
+// $row['price'] => string("19.99")   — DECIMAL always comes back as string
+
+// Cast disabled — everything is a string
+$client = new MysqlClient($config, castPreparedTypes: false);
+$row = await($client->fetchOne('SELECT id, price FROM products WHERE id = ?', [1]));
+// $row['id']    => string("1")
+// $row['price'] => string("19.99")
+```
+
+> **Note:** `castPreparedTypes` has no effect on queries executed without parameters (text protocol). The text protocol always returns every value as a string.
+
+When `castPreparedTypes` is `true`, column values are decoded from the MySQL binary protocol as follows:
 
 ### Integer types
 
