@@ -1400,7 +1400,7 @@ composer install
 ### Running tests
 
 The test suite requires a running database. Each supported server has a dedicated
-Docker Compose service pair: one plain TCP and one SSL and a matching Composer
+Docker Compose service pair: one plain TCP and one SSL, and a matching Composer
 script that sets the correct port environment variables before running Pest.
 
 **Start the database services you want to test against:**
@@ -1408,6 +1408,9 @@ script that sets the correct port environment variables before running Pest.
 ```bash
 # MySQL 8.0 (plain + SSL)
 docker compose up -d mysql mysql_ssl
+
+# MySQL 8.4 (plain + SSL)
+docker compose up -d mysql84 mysql84_ssl
 
 # MySQL 9.0 (plain + SSL)
 docker compose up -d mysql90 mysql90_ssl
@@ -1428,11 +1431,17 @@ docker ps  # all target containers should show (healthy)
 # MySQL 8.0  — connects to ports 3310 (plain) and 3307 (SSL)
 composer test:mysql
 
+# MySQL 8.4  — connects to ports 3315 (plain) and 3316 (SSL)
+composer test:mysql84
+
 # MySQL 9.0  — connects to ports 3313 (plain) and 3314 (SSL)
 composer test:mysql90
 
 # MariaDB LTS — connects to ports 3311 (plain) and 3308 (SSL)
 composer test:mariadb
+
+# All servers sequentially
+composer test:all
 ```
 
 **Tear down services when done:**
@@ -1458,6 +1467,7 @@ composer format
 | Service | Plain port | SSL port |
 |---|---|---|
 | MySQL 8.0 | 3310 | 3307 |
+| MySQL 8.4 | 3315 | 3316 |
 | MySQL 9.0 | 3313 | 3314 |
 | MariaDB LTS | 3311 | 3308 |
 

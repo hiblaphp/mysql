@@ -59,6 +59,11 @@
             "@putenv MYSQL_SSL_PORT=3307",
             "vendor/bin/pest --compact"
         ],
+        "test:mysql84": [
+            "@putenv MYSQL_PORT=3315",
+            "@putenv MYSQL_SSL_PORT=3316",
+            "vendor/bin/pest --compact"
+        ],
         "test:mysql90": [
             "@putenv MYSQL_PORT=3313",
             "@putenv MYSQL_SSL_PORT=3314",
