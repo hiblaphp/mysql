@@ -227,7 +227,7 @@ class UserRepository
 
 ## `MysqlConfig`
 
-`MysqlConfig` is the canonical, immutable connection-level configuration object. All three config formats accepted by `MysqlClient` — DSN string, associative array, and `MysqlConfig` directly — are normalised to this type internally. You can construct it explicitly when you want to share a single config object across multiple clients, derive variants from a base config, or keep all settings in one strongly-typed place.
+`MysqlConfig` is the canonical, immutable connection-level configuration object. All three config formats accepted by `MysqlClient`, and its DSN string, associative array, and `MysqlConfig` directly and are normalised to this type internally. You can construct it explicitly when you want to share a single config object across multiple clients, derive variants from a base config, or keep all settings in one strongly-typed place.
 
 ```php
 use Hibla\Mysql\ValueObjects\MysqlConfig;
@@ -1420,7 +1420,7 @@ composer install
 
 ### Running tests
 
-The test suite requires a running database. Each supported server has a dedicated Docker Compose service pair — one plain TCP and one SSL — and a matching Composer script that sets the correct port environment variables before running Pest.
+The test suite requires a running database. Each supported server has a dedicated Docker Compose service pair: one plain TCP and one SSL and a matching Composer script that sets the correct port environment variables before running Pest.
 
 **Start the database services you want to test against:**
 
