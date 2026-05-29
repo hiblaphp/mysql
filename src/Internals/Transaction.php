@@ -603,7 +603,6 @@ class Transaction implements TransactionInterface
         }
 
         return $this->statementCache->get($sql)->then(function (mixed $stmt) use ($sql) {
-            /** @phpstan-ignore instanceof.alwaysFalse */
             if ($stmt instanceof PreparedStatement) {
                 return [$stmt, true];
             }
