@@ -9,6 +9,7 @@ use Hibla\Mysql\Internals\Connection;
 use Hibla\Mysql\Internals\PreparedStatement;
 use Hibla\Promise\Promise;
 use Hibla\Sql\Exceptions\PreparedException;
+use Rcalicdan\MySQLBinaryProtocol\Exception\IncompleteBufferException;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Command\CommandBuilder;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Response\ColumnDefinitionOrEofParser;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Response\EofPacket;
@@ -53,8 +54,7 @@ final class PrepareHandler
     public function __construct(
         private readonly Connection $connection,
         private readonly CommandBuilder $commandBuilder
-    ) {
-    }
+    ) {}
 
     /**
      * @param string $sql
@@ -85,6 +85,8 @@ final class PrepareHandler
                 PrepareState::DRAIN_PARAMS => $this->drainDefinitions($reader, $length, $seq, 'params'),
                 PrepareState::DRAIN_COLUMNS => $this->drainDefinitions($reader, $length, $seq, 'columns'),
             };
+        } catch (IncompleteBufferException $e) {
+            throw $e; // This is CRITICAL: Let this bubble up to the PacketReader so it can pause and wait for the rest of the TCP chunk!
         } catch (\Throwable $e) {
             if (! $e instanceof PreparedException) {
                 $e = new PreparedException(

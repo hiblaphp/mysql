@@ -124,7 +124,7 @@ final class QueryHandler
                 ParserState::ROWS => $this->handleRow($reader, $length, $seq),
             };
         } catch (IncompleteBufferException $e) {
-            throw $e;
+            throw $e; // This is CRITICAL: Let this bubble up to the PacketReader so it can pause and wait for the rest of the TCP chunk!
         } catch (\Throwable $e) {
             if (! $e instanceof QueryException) {
                 $e = new QueryException(

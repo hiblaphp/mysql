@@ -7,6 +7,7 @@ namespace Hibla\Mysql\Handlers;
 use Hibla\Mysql\Internals\Connection;
 use Hibla\Promise\Promise;
 use Hibla\Sql\Exceptions\ConnectionException;
+use Rcalicdan\MySQLBinaryProtocol\Exception\IncompleteBufferException;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Response\ErrPacket;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Response\OkPacket;
 use Rcalicdan\MySQLBinaryProtocol\Frame\Response\ResponseParser;
@@ -23,8 +24,7 @@ final class PingHandler
 
     public function __construct(
         private readonly Connection $connection
-    ) {
-    }
+    ) {}
 
     /**
      * @param Promise<bool> $promise
@@ -65,6 +65,8 @@ final class PingHandler
             $this->currentPromise?->reject($exception);
 
             return true;
+        } catch (IncompleteBufferException $e) {
+            throw $e; // This is CRITICAL: Let this bubble up to the PacketReader so it can pause and wait for the rest of the TCP chunk!
         } catch (\Throwable $e) {
             if (! $e instanceof ConnectionException) {
                 $e = new ConnectionException(
