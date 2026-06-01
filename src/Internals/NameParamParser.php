@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Hibla\Mysql\Internals;
 
-use InvalidArgumentException;
+use Hibla\Sql\Exceptions\PreparedException;
 
 /**
  * @internal
@@ -74,7 +74,7 @@ final class NameParamParser
                 if ($currentChar === '?') {
                     $hasPositional = true;
                     if ($hasNamed) {
-                        throw new InvalidArgumentException('Cannot mix named and positional parameters in the same query.');
+                        throw new PreparedException('Cannot mix named and positional parameters in the same query.');
                     }
                     $result .= '?';
                     $paramIndex++;
@@ -135,7 +135,7 @@ final class NameParamParser
                     if ($paramName !== '') {
                         $hasNamed = true;
                         if ($hasPositional) {
-                            throw new InvalidArgumentException('Cannot mix named and positional parameters in the same query.');
+                            throw new PreparedException('Cannot mix named and positional parameters in the same query.');
                         }
                         $result .= '?';
                         $paramMap[$paramIndex++] = $paramName; // @phpstan-ignore-next-line no-undefined-variables

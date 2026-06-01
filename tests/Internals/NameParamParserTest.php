@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hibla\Mysql\Tests\Internals;
 
 use Hibla\Mysql\Internals\NameParamParser;
+use Hibla\Sql\Exceptions\PreparedException;
 
 describe('NameParamParser', function (): void {
     it('leaves plain queries untouched', function (): void {
@@ -208,13 +209,13 @@ describe('NameParamParser', function (): void {
 
     it('throws when mixing named after positional', function (): void {
         expect(fn () => NameParamParser::parse('SELECT * FROM users WHERE id = ? AND name = :name'))
-            ->toThrow(\InvalidArgumentException::class, 'Cannot mix named and positional')
+            ->toThrow(PreparedException::class, 'Cannot mix named and positional')
         ;
     });
 
     it('throws when mixing positional after named', function (): void {
         expect(fn () => NameParamParser::parse('SELECT * FROM users WHERE name = :name AND id = ?'))
-            ->toThrow(\InvalidArgumentException::class, 'Cannot mix named and positional')
+            ->toThrow(PreparedException::class, 'Cannot mix named and positional')
         ;
     });
 
@@ -351,7 +352,7 @@ describe('NameParamParser', function (): void {
     // -------------------------------------------------------------------------
 
     it('does not treat SQL keywords after a colon as named parameters', function (): void {
-        // :SELECT, :DROP etc. are valid identifier names — they should be replaced
+        // :SELECT, :DROP etc. are valid identifier names and they should be replaced
         // safely as positional placeholders, not interpreted as SQL
         [$sql, $map] = NameParamParser::parse('SELECT * FROM t WHERE id = :SELECT');
         expect($sql)->toBe('SELECT * FROM t WHERE id = ?')

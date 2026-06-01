@@ -9,7 +9,6 @@ use Hibla\Mysql\Internals\PreparedStatement;
 use Hibla\Mysql\ValueObjects\StreamContext;
 use Hibla\Promise\Promise;
 use Hibla\Sql\Exceptions\PreparedException;
-use InvalidArgumentException;
 use Mockery;
 
 describe('PreparedStatement', function (): void {
@@ -22,7 +21,7 @@ describe('PreparedStatement', function (): void {
         $stmt = new PreparedStatement($conn, id: 1, numColumns: 0, numParams: 2);
 
         expect(fn () => $stmt->execute([1]))
-            ->toThrow(InvalidArgumentException::class, 'Statement expects 2 parameters, got 1')
+            ->toThrow(PreparedException::class, 'Statement expects 2 parameters, got 1')
         ;
     });
 
@@ -33,7 +32,7 @@ describe('PreparedStatement', function (): void {
         $stmt = new PreparedStatement($conn, id: 1, numColumns: 0, numParams: 1);
 
         expect(fn () => $stmt->executeStream([]))
-            ->toThrow(InvalidArgumentException::class, 'Statement expects 1 parameters, got 0')
+            ->toThrow(PreparedException::class, 'Statement expects 1 parameters, got 0')
         ;
     });
 

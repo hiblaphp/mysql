@@ -9,6 +9,7 @@ use Hibla\Mysql\Internals\RowStream;
 use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Socket\Connector;
 use Hibla\Sql\Exceptions\ConnectionException;
+use Hibla\Sql\Exceptions\PreparedException;
 
 use function Hibla\await;
 
@@ -349,14 +350,14 @@ describe('Connection', function (): void {
             $conn->close();
         });
 
-        it('throws InvalidArgumentException when param count does not match', function (): void {
+        it('throws PreparedException when param count does not match', function (): void {
             $conn = makeConnection();
             $stmt = await($conn->prepare(
                 'INSERT INTO pest_users (name, email, age) VALUES (?, ?, ?)'
             ));
 
             expect(fn () => $stmt->execute(['Judy', 'judy@example.com']))
-                ->toThrow(InvalidArgumentException::class)
+                ->toThrow(PreparedException::class)
             ;
 
             await($stmt->close());

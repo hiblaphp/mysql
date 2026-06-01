@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Hibla\Mysql\Internals\RowStream;
 
+use Hibla\Sql\Exceptions\PreparedException;
 use function Hibla\await;
 
 beforeAll(function (): void {
@@ -82,7 +83,7 @@ describe('Connection Named Parameters', function (): void {
         $stmt = await($conn->prepare('SELECT * FROM conn_named_test WHERE name = :name'));
 
         expect(fn () => await($stmt->execute(['wrong_key' => 'Alice'])))
-            ->toThrow(InvalidArgumentException::class, 'Missing value for named parameter: :name')
+            ->toThrow(PreparedException::class, 'Missing value for named parameter: :name')
         ;
 
         await($stmt->close());
@@ -106,7 +107,7 @@ describe('Connection Named Parameters', function (): void {
         $conn = makeConnection();
 
         expect(fn () => await($conn->prepare('SELECT * FROM conn_named_test WHERE id = ? AND name = :name')))
-            ->toThrow(InvalidArgumentException::class, 'Cannot mix named and positional parameters')
+            ->toThrow(PreparedException::class, 'Cannot mix named and positional parameters')
         ;
 
         $conn->close();

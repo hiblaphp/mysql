@@ -61,7 +61,7 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
             $mappedParams = [];
             foreach ($this->paramMap as $index => $name) {
                 if (! \array_key_exists($name, $params)) {
-                    throw new \InvalidArgumentException("Missing value for named parameter: :{$name}");
+                    throw new PreparedException("Missing value for named parameter: :{$name}");
                 }
                 $mappedParams[$index] = $params[$name];
             }
@@ -69,7 +69,7 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
         }
 
         if (\count($params) !== $this->numParams) {
-            throw new \InvalidArgumentException(
+            throw new PreparedException(
                 \sprintf('Statement expects %d parameters, got %d', $this->numParams, \count($params))
             );
         }
@@ -97,7 +97,7 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
             $mappedParams = [];
             foreach ($this->paramMap as $index => $name) {
                 if (! \array_key_exists($name, $params)) {
-                    throw new \InvalidArgumentException("Missing value for named parameter: :{$name}");
+                    throw new PreparedException("Missing value for named parameter: :{$name}");
                 }
                 $mappedParams[$index] = $params[$name];
             }
@@ -105,7 +105,7 @@ class PreparedStatement implements PreparedStatementInterface, StreamingStatemen
         }
 
         if (\count($params) !== $this->numParams) {
-            throw new \InvalidArgumentException(
+            throw new PreparedException(
                 \sprintf('Statement expects %d parameters, got %d', $this->numParams, \count($params))
             );
         }
