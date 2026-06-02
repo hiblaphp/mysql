@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use Hibla\Mysql\Internals\RowStream;
-
 use Hibla\Sql\Exceptions\PreparedException;
+
 use function Hibla\await;
 
 beforeAll(function (): void {

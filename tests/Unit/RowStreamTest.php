@@ -129,10 +129,12 @@ describe('RowStream', function (): void {
         $stream->push(['id' => 2]);
         $stream->push(['id' => 3]);
         $stream->push(['id' => 4]);
-        $stream->complete(Mockery::mock(StreamStats::class));
 
-        foreach ($stream as $_) {
-        }
+        $generator = $stream->getIterator();
+
+        $generator->current();
+        $generator->next();
+        $generator->next();
 
         expect($resumed)->toBeTrue();
     });

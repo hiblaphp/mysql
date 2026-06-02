@@ -54,7 +54,8 @@ final class PrepareHandler
     public function __construct(
         private readonly Connection $connection,
         private readonly CommandBuilder $commandBuilder
-    ) {}
+    ) {
+    }
 
     /**
      * @param string $sql

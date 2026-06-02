@@ -24,7 +24,8 @@ final class PingHandler
 
     public function __construct(
         private readonly Connection $connection
-    ) {}
+    ) {
+    }
 
     /**
      * @param Promise<bool> $promise

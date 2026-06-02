@@ -204,6 +204,8 @@ class RowStream implements MysqlRowStream
         $this->cancelled = true;
         $this->error = new CancelledException('Stream was cancelled');
 
+        $this->onBackpressure = null;
+
         // Fire the user-level cancel callback first and unconditionally.
         if ($this->onCancelCallback !== null) {
             ($this->onCancelCallback)();
@@ -284,6 +286,8 @@ class RowStream implements MysqlRowStream
 
         $this->internalStats = $stats;
         $this->completed = true;
+
+        $this->onBackpressure = null;
 
         if ($this->waiter !== null) {
             $promise = $this->waiter;
