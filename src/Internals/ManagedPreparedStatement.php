@@ -60,10 +60,10 @@ class ManagedPreparedStatement implements PreparedStatementInterface
      * @throws PreparedException If the statement is closed
      * @throws \InvalidArgumentException If parameter count doesn't match
      */
-    public function executeStream(array $params = []): PromiseInterface
+    public function executeStream(array $params = [], int $bufferSize = 100): PromiseInterface
     {
         /** @var PromiseInterface<MysqlRowStream> $promise */
-        $promise = $this->statement->executeStream($params);
+        $promise = $this->statement->executeStream($params, $bufferSize);
 
         return Promise::propagateCancellation($promise);
     }

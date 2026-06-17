@@ -51,10 +51,10 @@ class TransactionPreparedStatement implements PreparedStatementInterface
      *
      * @return PromiseInterface<MysqlRowStream>
      */
-    public function executeStream(array $params = []): PromiseInterface
+    public function executeStream(array $params = [], int $bufferSize = 100): PromiseInterface
     {
         /** @var PromiseInterface<MysqlRowStream> $promise */
-        $promise = $this->statement->executeStream($params);
+        $promise = $this->statement->executeStream($params, $bufferSize);
 
         if ($this->onStreamError !== null) {
             $onStreamError = $this->onStreamError;
@@ -89,8 +89,7 @@ class TransactionPreparedStatement implements PreparedStatementInterface
     public function close(): PromiseInterface
     {
         if ($this->isClosed) {
-            // @phpstan-ignore-next-line
-            return Promise::resolved(null);
+            return Promise::resolved();
         }
 
         $this->isClosed = true;
