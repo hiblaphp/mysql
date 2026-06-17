@@ -33,7 +33,7 @@ describe('TransactionPreparedStatement', function (): void {
         $inner->shouldReceive('close')->andReturn(Promise::resolved())->byDefault();
 
         $expected = new Promise();
-        $inner->shouldReceive('executeStream')->once()->with(['val'])->andReturn($expected);
+        $inner->shouldReceive('executeStream')->once()->with(['val'], 100)->andReturn($expected);
 
         expect(new TransactionPreparedStatement($inner, $conn))->executeStream(['val'])->toBe($expected);
     });

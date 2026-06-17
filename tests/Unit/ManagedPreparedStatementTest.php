@@ -44,7 +44,7 @@ describe('ManagedPreparedStatement', function (): void {
         $inner->shouldReceive('close')->andReturn(Promise::resolved())->byDefault();
 
         $expected = new Promise();
-        $inner->shouldReceive('executeStream')->once()->with([])->andReturn($expected);
+        $inner->shouldReceive('executeStream')->once()->with([], 100)->andReturn($expected);
 
         $managed = new ManagedPreparedStatement($inner, $conn, $pool);
 
