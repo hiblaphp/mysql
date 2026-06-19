@@ -19,6 +19,7 @@ use SplQueue;
 use Throwable;
 
 use function Hibla\async;
+use function Hibla\await;
 
 /**
  * @internal This is a low-level, internal class. DO NOT USE IT DIRECTLY.
@@ -537,8 +538,7 @@ class PoolManager
 
             $pendingShutdown->finally(function () use ($timerId): void {
                 Loop::cancelTimer($timerId);
-            })->catch(static function (): void {
-            });
+            })->catch(static function (): void {});
         }
 
         if ($this->shutdownPromise !== null) {
@@ -655,8 +655,7 @@ class PoolManager
                         $stats['unhealthy']++;
                         $this->removeConnection($connection);
                     }
-                )
-            ;
+                );
         }
 
         $drainTempQueue = function () use ($tempQueue): void {
@@ -750,9 +749,24 @@ class PoolManager
 
         $setup = new ConnectionSetup($connection);
 
-        return async(fn () => ($this->onConnect)($setup))
-            ->then(fn () => $connection)
-        ;
+        /** @var Promise<MysqlConnection> $promise */
+        $promise = new Promise();
+
+        async(function () use ($setup, $connection, $promise) {
+            try {
+                $result = ($this->onConnect)($setup);
+
+                if ($result instanceof PromiseInterface) {
+                    await($result);
+                }
+
+                $promise->resolve($connection);
+            } catch (Throwable $e) {
+                $promise->reject($e);
+            }
+        });
+
+        return $promise;
     }
 
     /**
@@ -872,7 +886,7 @@ class PoolManager
                 // initial handshake. The hook must restore it for the same reason
                 // it ran at connect time.
                 $this->runOnConnectHook($connection)->then(
-                    fn () => $this->releaseClean($connection),
+                    fn() => $this->releaseClean($connection),
                     function (Throwable $e) use ($connection): void {
                         // Hook failed after reset — unknown session state, drop it.
                         $this->removeConnection($connection);
