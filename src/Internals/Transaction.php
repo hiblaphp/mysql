@@ -10,6 +10,7 @@ use Hibla\Mysql\Interfaces\MysqlRowStream;
 use Hibla\Mysql\Manager\PoolManager;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
+use Hibla\Sql\DatabaseDriver;
 use Hibla\Sql\Exceptions\TransactionException;
 use Hibla\Sql\PreparedStatement as PreparedStatementInterface;
 use Hibla\Sql\Result as ResultInterface;
@@ -43,6 +44,13 @@ class Transaction implements TransactionInterface
      * We enforce a strict failure state requiring an explicit ROLLBACK.
      */
     private bool $failed = false;
+
+    /**
+     * @inheritdoc
+     */
+    public DatabaseDriver $driver {
+        get => DatabaseDriver::Mysql;
+    }
 
     /**
      * @internal Use MysqlClient::beginTransaction() instead.

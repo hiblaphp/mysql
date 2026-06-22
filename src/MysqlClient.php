@@ -18,6 +18,7 @@ use Hibla\Mysql\ValueObjects\MysqlConfig;
 use Hibla\Promise\Interfaces\PromiseInterface;
 use Hibla\Promise\Promise;
 use Hibla\Socket\Interfaces\ConnectorInterface;
+use Hibla\Sql\DatabaseDriver;
 use Hibla\Sql\IsolationLevelInterface;
 use Hibla\Sql\Result as ResultInterface;
 use Hibla\Sql\SqlClientInterface;
@@ -90,6 +91,13 @@ final class MysqlClient implements SqlClientInterface
      * @var PromiseInterface<void>|null
      */
     private ?PromiseInterface $closePromise = null;
+
+    /**
+     * @inheritdoc
+     */
+    public DatabaseDriver $driver {
+        get => DatabaseDriver::Mysql;
+    }
 
     /**
      * Creates a new independent MysqlClient instance.
